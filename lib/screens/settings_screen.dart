@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:everwith/core/auth/auth_service.dart';
+import 'package:everwith/core/settings/accessibility_settings.dart';
 import 'package:everwith/core/auth/auth_result.dart';
 import 'package:everwith/core/constants/app_spacing.dart';
 import 'package:everwith/core/theme/app_colors.dart';
@@ -94,27 +95,39 @@ class _AccessibilityToggles extends StatefulWidget {
 }
 
 class _AccessibilityTogglesState extends State<_AccessibilityToggles> {
-  bool _largeFont = false;
-  bool _highContrast = false;
-  bool _tts = false;
+  final _settings = AccessibilitySettings.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    _settings.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         SwitchListTile.adaptive(
-          value: _largeFont,
-          onChanged: (v) => setState(() => _largeFont = v),
+          value: _settings.largeFont,
+          onChanged: _settings.setLargeFont,
           title: const Text('Large Font Size'),
         ),
         SwitchListTile.adaptive(
-          value: _highContrast,
-          onChanged: (v) => setState(() => _highContrast = v),
+          value: _settings.highContrast,
+          onChanged: _settings.setHighContrast,
           title: const Text('High Contrast'),
         ),
         SwitchListTile.adaptive(
-          value: _tts,
-          onChanged: (v) => setState(() => _tts = v),
+          value: _settings.tts,
+          onChanged: _settings.setTts,
           title: const Text('Text-to-Speech'),
         ),
       ],

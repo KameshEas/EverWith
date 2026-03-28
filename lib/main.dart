@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'core/settings/accessibility_settings.dart';
 import 'firebase_options.dart';
 import 'screens/onboarding_screen.dart';
 
@@ -11,6 +12,7 @@ void main() async {
   } catch (e) {
     // Firebase already initialized (e.g. on hot restart)
   }
+  await AccessibilitySettings.instance.load();
   runApp(const EverWithApp());
 }
 
