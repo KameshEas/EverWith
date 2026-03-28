@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/app_assets.dart';
 import '../core/constants/app_spacing.dart';
@@ -135,7 +136,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   // ── Navigate to Home ─────────────────────────────────────────────────────
-  void _onGetStarted() {
+  Future<void> _onGetStarted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('seen_onboarding', true);
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (_, animation, __) => const LoginScreen(),
