@@ -9,6 +9,7 @@ import '../core/constants/app_spacing.dart';
 import '../core/services/family_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
+import '../widgets/confirm_bottom_sheet.dart';
 
 class FamilyScreen extends StatefulWidget {
   const FamilyScreen({super.key});
@@ -184,23 +185,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   Future<void> _confirmRemove(FamilyContact c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
-        title: const Text('Remove contact?'),
-        content: Text('Remove ${c.name} from your family list?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Remove',
-                  style: TextStyle(color: AppColors.errorRed))),
-        ],
-      ),
+    final ok = await showConfirmSheet(
+      context,
+      icon: Icons.person_remove_rounded,
+      title: 'Remove ${c.name}?',
+      message: 'They will be removed from your family contacts list.',
+      confirmLabel: 'Remove',
     );
     if (ok != true) return;
 
@@ -218,61 +208,115 @@ class _FamilyScreenState extends State<FamilyScreen> {
       context: context,
       isDismissible: false,
       enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusLg)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: AppSpacing.md),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: AppColors.inputBorder,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Column(
-                children: [
-                  const Icon(Icons.star_rounded,
-                      color: AppColors.primaryBlue, size: 36),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text('Choose a New Caregiver',
-                      style: AppTextStyles.heading.copyWith(fontSize: 20)),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Your caregiver was removed. Please select who should be your priority contact.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.body
-                        .copyWith(fontSize: 14, color: AppColors.textGray),
-                  ),
-                ],
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.cardWhite,
+          borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppSpacing.radiusLg)),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle (decorative only — sheet is non-dismissible)
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: AppColors.inputBorder,
+                    borderRadius: BorderRadius.circular(2)),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            ...others.map((c) => ListTile(
-                  leading: _Avatar(contact: c, size: 44),
-                  title: Text(c.name,
-                      style: AppTextStyles.body.copyWith(
-                          fontWeight: FontWeight.w700, fontSize: 16)),
-                  subtitle: Text(c.phone,
-                      style: AppTextStyles.body
-                          .copyWith(fontSize: 13, color: AppColors.textGray)),
-                  trailing: const Icon(Icons.star_outline_rounded,
-                      color: AppColors.primaryBlue),
-                  onTap: () async {
-                    await _svc.setCaregiver(c.id);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
-                )),
-            const SizedBox(height: AppSpacing.md),
-          ],
+              const SizedBox(height: AppSpacing.xl),
+              // Star icon badge
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: AppColors.chipBlueLight,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.star_rounded,
+                    color: AppColors.primaryBlue, size: 30),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text('Choose a New Caregiver',
+                  style: AppTextStyles.heading.copyWith(fontSize: 20),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child: Text(
+                  'Select who should be your priority contact for emergencies.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.body
+                      .copyWith(fontSize: 14, color: AppColors.textGray),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              // Contact list
+              ...others.map((c) => Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: GestureDetector(
+                      onTap: () async {
+                        await _svc.setCaregiver(c.id);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.inputBackground,
+                          borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusMd),
+                          border: Border.all(
+                              color: AppColors.inputBorder, width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            _Avatar(contact: c, size: 46),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(c.name,
+                                      style: AppTextStyles.body.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16)),
+                                  const SizedBox(height: 2),
+                                  Text(c.phone,
+                                      style: AppTextStyles.body.copyWith(
+                                          fontSize: 13,
+                                          color: AppColors.textGray)),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: AppColors.chipBlueLight,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                  Icons.star_outline_rounded,
+                                  color: AppColors.primaryBlue,
+                                  size: 18),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )),
+              const SizedBox(height: AppSpacing.xl),
+            ],
+          ),
         ),
       ),
     );

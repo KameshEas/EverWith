@@ -8,6 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../core/auth/auth_service.dart';
 import '../core/constants/app_spacing.dart';
 import '../core/services/wake_word_service.dart';
+import '../core/settings/accessibility_settings.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import 'family_screen.dart';
@@ -227,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen>
           profilePhoto: _profilePhoto,
           isListening: _isListening,
           recognizedText: _recognizedText,
+          onNavigate: _onNavTap,
         );
     }
   }
@@ -434,12 +436,14 @@ class _HomeBody extends StatelessWidget {
     required this.profilePhoto,
     required this.isListening,
     required this.recognizedText,
+    required this.onNavigate,
   });
 
   final String userName;
   final File? profilePhoto;
   final bool isListening;
   final String recognizedText;
+  final void Function(int) onNavigate;
 
   String get _greeting {
     final h = DateTime.now().hour;
@@ -480,22 +484,10 @@ class _HomeBody extends StatelessWidget {
                               size: 28, color: Colors.white)
                           : null,
                     ),
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.shadow.withAlpha(38),
-                            blurRadius: 12,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.search_rounded,
-                          size: 22, color: AppColors.iconMuted),
+                    _LanguageButton(
+                      languageCode:
+                          AccessibilitySettings.instance.languageCode,
+                      onTap: () => _showLanguageSheet(context),
                     ),
                   ],
                 ),
@@ -546,6 +538,7 @@ class _HomeBody extends StatelessWidget {
                   subtitle: 'Connect with loved ones',
                   iconColor: AppColors.primaryBlue,
                   iconBg: const Color(0xFFEFF6FF),
+                  onTap: () => onNavigate(3),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _ActionCard(
@@ -554,6 +547,7 @@ class _HomeBody extends StatelessWidget {
                   subtitle: 'Check your daily schedule',
                   iconColor: const Color(0xFF16A34A),
                   iconBg: const Color(0xFFF0FDF4),
+                  onTap: () => onNavigate(1),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _ActionCard(
@@ -597,6 +591,7 @@ class _ActionCard extends StatelessWidget {
     this.cardBg,
     this.labelColor,
     this.chevronColor,
+    this.onTap,
   });
 
   final IconData icon;
@@ -607,6 +602,7 @@ class _ActionCard extends StatelessWidget {
   final Color? cardBg;
   final Color? labelColor;
   final Color? chevronColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -616,17 +612,8 @@ class _ActionCard extends StatelessWidget {
       elevation: 0,
       child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('$label — coming soon!',
-                style: const TextStyle(fontSize: 16)),
-            duration: const Duration(seconds: 2),
-            backgroundColor: iconColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
-          ));
-        },
+        onTap: onTap,
+        enableFeedback: onTap != null,
         child: Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md, vertical: AppSpacing.md + 2),
@@ -671,6 +658,197 @@ class _ActionCard extends StatelessWidget {
                   color: chevronColor ?? AppColors.iconMuted, size: 24),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Language data & helpers
+// ─────────────────────────────────────────────────────────────────────────────
+class _LangOption {
+  const _LangOption(this.code, this.name, this.flag);
+  final String code;
+  final String name;
+  final String flag;
+}
+
+const _kLanguages = [
+  _LangOption('en', 'English', '🇺🇸'),
+  _LangOption('es', 'Spanish', '🇪🇸'),
+  _LangOption('fr', 'French', '🇫🇷'),
+  _LangOption('hi', 'Hindi', '🇮🇳'),
+  _LangOption('ta', 'Tamil', '🇮🇳'),
+  _LangOption('zh', 'Chinese', '🇨🇳'),
+  _LangOption('ar', 'Arabic', '🇸🇦'),
+  _LangOption('pt', 'Portuguese', '🇧🇷'),
+];
+
+_LangOption _langByCode(String code) =>
+    _kLanguages.firstWhere((l) => l.code == code,
+        orElse: () => _kLanguages.first);
+
+void _showLanguageSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => _LanguageSheet(ctx),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  _LanguageButton  — top-right chip showing current language
+// ─────────────────────────────────────────────────────────────────────────────
+class _LanguageButton extends StatelessWidget {
+  const _LanguageButton({required this.languageCode, required this.onTap});
+
+  final String languageCode;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = _langByCode(languageCode);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.cardWhite,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withAlpha(38),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(lang.flag, style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 6),
+            Text(
+              lang.code.toUpperCase(),
+              style: AppTextStyles.body.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more_rounded,
+                size: 16, color: AppColors.iconMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  _LanguageSheet  — bottom sheet language picker
+// ─────────────────────────────────────────────────────────────────────────────
+class _LanguageSheet extends StatefulWidget {
+  const _LanguageSheet(this.parentCtx);
+  final BuildContext parentCtx;
+
+  @override
+  State<_LanguageSheet> createState() => _LanguageSheetState();
+}
+
+class _LanguageSheetState extends State<_LanguageSheet> {
+  String _selected = AccessibilitySettings.instance.languageCode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.cardWhite,
+        borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusLg)),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: AppColors.inputBorder,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Language',
+                style: AppTextStyles.heading.copyWith(fontSize: 22)),
+            const SizedBox(height: 4),
+            Text('Choose your preferred language',
+                style: AppTextStyles.body
+                    .copyWith(fontSize: 14, color: AppColors.textGray)),
+            const SizedBox(height: AppSpacing.lg),
+            // Language grid
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: _kLanguages.map((lang) {
+                final isSelected = lang.code == _selected;
+                return GestureDetector(
+                  onTap: () async {
+                    setState(() => _selected = lang.code);
+                    await AccessibilitySettings.instance
+                        .setLanguage(lang.code);
+                    if (!mounted) return;
+                    // ignore: use_build_context_synchronously
+                    Navigator.pop(context);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primaryBlue
+                          : AppColors.inputBackground,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd),
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.primaryBlue
+                            : AppColors.inputBorder,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(lang.flag,
+                            style: const TextStyle(fontSize: 18)),
+                        const SizedBox(width: 8),
+                        Text(
+                          lang.name,
+                          style: AppTextStyles.body.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ),
       ),
     );

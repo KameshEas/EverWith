@@ -8,20 +8,24 @@ class AccessibilitySettings extends ChangeNotifier {
   static const _keyLargeFont = 'a11y_large_font';
   static const _keyHighContrast = 'a11y_high_contrast';
   static const _keyTts = 'a11y_tts';
+  static const _keyLanguage = 'a11y_language';
 
   bool _largeFont = false;
   bool _highContrast = false;
   bool _tts = false;
+  String _languageCode = 'en';
 
   bool get largeFont => _largeFont;
   bool get highContrast => _highContrast;
   bool get tts => _tts;
+  String get languageCode => _languageCode;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _largeFont = prefs.getBool(_keyLargeFont) ?? false;
     _highContrast = prefs.getBool(_keyHighContrast) ?? false;
     _tts = prefs.getBool(_keyTts) ?? false;
+    _languageCode = prefs.getString(_keyLanguage) ?? 'en';
     notifyListeners();
   }
 
@@ -44,5 +48,12 @@ class AccessibilitySettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyTts, value);
+  }
+
+  Future<void> setLanguage(String code) async {
+    _languageCode = code;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLanguage, code);
   }
 }

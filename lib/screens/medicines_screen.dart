@@ -5,6 +5,7 @@ import '../core/models/medicine.dart';
 import '../core/services/medicine_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
+import '../widgets/confirm_bottom_sheet.dart';
 import 'add_medicine_screen.dart';
 
 class MedicinesScreen extends StatefulWidget {
@@ -133,28 +134,12 @@ class _MedicinesScreenState extends State<MedicinesScreen> {
   }
 
   Future<void> _confirmDelete(Medicine m) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
-        title: const Text('Remove Medicine?'),
-        content: Text('Remove ${m.name} from your schedule?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style:
-                    AppTextStyles.linkText.copyWith(color: AppColors.textGray)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Remove',
-                style: AppTextStyles.linkText
-                    .copyWith(color: AppColors.errorRed)),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmSheet(
+      context,
+      icon: Icons.medication_rounded,
+      title: 'Remove Medicine?',
+      message: 'Remove ${m.name} from your schedule?',
+      confirmLabel: 'Remove',
     );
     if (confirmed == true) {
       await MedicineService.instance.remove(m.id);

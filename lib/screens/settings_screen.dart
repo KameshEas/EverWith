@@ -13,6 +13,7 @@ import 'package:everwith/core/settings/accessibility_settings.dart';
 import 'package:everwith/core/theme/app_colors.dart';
 import 'package:everwith/core/theme/app_text_styles.dart';
 import '../main.dart' show AuthGate;
+import '../widgets/confirm_bottom_sheet.dart';
 import 'help_screen.dart';
 import 'login_screen.dart';
 import 'notifications_screen.dart';
@@ -461,32 +462,12 @@ class _SignOutTile extends StatelessWidget {
       leading: const Icon(Icons.logout_rounded, color: AppColors.errorRed),
       title: Text('Sign Out', style: AppTextStyles.buttonLabel.copyWith(color: AppColors.errorRed)),
       onTap: () async {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            title: const Text('Sign Out?'),
-            content: const Text(
-              'Are you sure you want to sign out?',
-              style: TextStyle(fontSize: 16),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text('Cancel',
-                    style: AppTextStyles.linkText
-                        .copyWith(color: AppColors.textGray)),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Sign Out',
-                    style:
-                        AppTextStyles.linkText.copyWith(color: AppColors.errorRed)),
-              ),
-            ],
-          ),
+        final confirmed = await showConfirmSheet(
+          context,
+          icon: Icons.logout_rounded,
+          title: 'Sign Out?',
+          message: 'Are you sure you want to sign out?',
+          confirmLabel: 'Sign Out',
         );
         if (confirmed != true) return;
         // Pause the auth gate so the listener doesn't also navigate
