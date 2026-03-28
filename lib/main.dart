@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/services/medicine_service.dart';
 import 'core/services/wake_word_service.dart';
+import 'core/settings/notification_settings.dart';
 import 'core/settings/accessibility_settings.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
@@ -26,6 +27,7 @@ void main() async {
     // Firebase already initialized (e.g. on hot restart)
   }
   await AccessibilitySettings.instance.load();
+  await NotificationSettings.instance.load();
   await MedicineService.instance.init();
   runApp(const EverWithApp());
 }

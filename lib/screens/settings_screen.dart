@@ -13,7 +13,9 @@ import 'package:everwith/core/settings/accessibility_settings.dart';
 import 'package:everwith/core/theme/app_colors.dart';
 import 'package:everwith/core/theme/app_text_styles.dart';
 import '../main.dart' show AuthGate;
+import 'help_screen.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -60,9 +62,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: AppSpacing.xl),
           _SectionLabel('Account'),
           const SizedBox(height: AppSpacing.md),
+          _NotificationsTile(),
+          const SizedBox(height: AppSpacing.sm),
           if (AuthService.instance.isEmailUser)
             _ChangePasswordTile(email: _user?.email ?? ''),
           _EmergencyContactTile(),
+          const SizedBox(height: AppSpacing.md),
+          _HelpSupportTile(),
           const SizedBox(height: AppSpacing.md),
           _SignOutTile(),
           const SizedBox(height: AppSpacing.xl),
@@ -377,6 +383,72 @@ class _AccessibilityTogglesState extends State<_AccessibilityToggles> {
           title: const Text('Text-to-Speech'),
         ),
       ],
+    );
+  }
+}
+
+class _NotificationsTile extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: const BoxDecoration(
+          color: Color(0xFFDBEAFF),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.notifications_rounded,
+            size: 22, color: AppColors.primaryBlue),
+      ),
+      title: Text('Notifications',
+          style: AppTextStyles.body.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark)),
+      subtitle: Text('Medicine, family, emergency alerts',
+          style: AppTextStyles.body
+              .copyWith(fontSize: 13, color: AppColors.textGray)),
+      trailing: const Icon(Icons.chevron_right_rounded,
+          color: AppColors.iconMuted),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+      ),
+    );
+  }
+}
+
+class _HelpSupportTile extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: const BoxDecoration(
+          color: Color(0xFFEFF6FF),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.help_outline_rounded,
+            size: 22, color: AppColors.primaryBlue),
+      ),
+      title: Text('Help & Support',
+          style: AppTextStyles.body.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark)),
+      subtitle: Text('FAQs, contact, and guide',
+          style: AppTextStyles.body
+              .copyWith(fontSize: 13, color: AppColors.textGray)),
+      trailing: const Icon(Icons.chevron_right_rounded,
+          color: AppColors.iconMuted),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const HelpScreen()),
+      ),
     );
   }
 }
