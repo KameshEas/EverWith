@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'settings_screen.dart';
 
 import '../core/constants/app_spacing.dart';
 import '../core/theme/app_colors.dart';
@@ -85,7 +86,15 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppSpacing.lg),
-                _HomeHeader(onSettingsTap: () {}),
+                _HomeHeader(
+                  onSettingsTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 _GreetingBanner(userName: widget.userName),
                 const SizedBox(height: AppSpacing.xl + 8),

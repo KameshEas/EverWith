@@ -44,7 +44,7 @@ class AuthService {
       );
       return AuthSuccess(_mapUser(credential.user)!);
     } on FirebaseAuthException catch (e) {
-      return AuthFailure(authErrorMessage(e.code));
+      return AuthFailure(authErrorMessage(e.code), code: e.code);
     } catch (_) {
       return AuthFailure(authErrorMessage('unknown'));
     }

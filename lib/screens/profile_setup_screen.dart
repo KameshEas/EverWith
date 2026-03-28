@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -78,12 +79,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     return nameErr == null && phoneErr == null;
   }
 
-  void _onContinue() {
+  Future<void> _onContinue() async {
     if (!_validate()) return;
 
-    // TODO: persist name & phone to Firestore / user profile
     final name = _nameCtrl.text.trim();
 
+    // Persist displayName to Firebase Auth so re-login skips this screen
+    try {
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+    } catch (_) {
+      // Non-critical — proceed anyway
+    }
+
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (context, animation, secondaryAnimation) =>

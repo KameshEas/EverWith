@@ -91,8 +91,13 @@ class _LoginScreenState extends State<LoginScreen> {
     switch (result) {
       case AuthSuccess():
         _navigateToHome();
-      case AuthFailure(:final message):
-        _showError(message);
+      case AuthFailure(:final message, :final code):
+        // If no account exists for this email, push to Signup with email pre-filled
+        if (code == 'user-not-found' || code == 'invalid-credential') {
+          _goToSignupWithEmail(_emailCtrl.text.trim());
+        } else {
+          _showError(message);
+        }
     }
   }
 
@@ -104,12 +109,17 @@ class _LoginScreenState extends State<LoginScreen> {
     switch (result) {
       case AuthSuccess(:final user):
         if (!mounted) return;
+        // If the user already has a display name, skip profile setup
+        final needsProfile =
+            user.displayName == null || user.displayName!.trim().isEmpty;
         Navigator.of(context).pushReplacement(
           PageRouteBuilder<void>(
-            pageBuilder: (_, animation, __) => ProfileSetupScreen(
-              prefillName: user.displayName,
-              prefillEmail: user.email,
-            ),
+            pageBuilder: (_, animation, __) => needsProfile
+                ? ProfileSetupScreen(
+                    prefillName: user.displayName,
+                    prefillEmail: user.email,
+                  )
+                : HomeScreen(userName: user.displayName!),
             transitionsBuilder: (_, animation, __, child) =>
                 FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 500),
@@ -174,6 +184,32 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, animation, __) => const SignupScreen(),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: animation,
+          child: child,
+        ),
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
+  }
+
+  void _goToSignupWithEmail(String email) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'No account found for $email. Please sign up.',
+          style: const TextStyle(fontSize: 16),
+        ),
+        backgroundColor: AppColors.primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+      ),
+    );
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (_, animation, __) => SignupScreen(prefillEmail: email),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: animation,
           child: child,

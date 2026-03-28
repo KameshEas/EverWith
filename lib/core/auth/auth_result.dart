@@ -16,8 +16,11 @@ final class AuthSuccess extends AuthResult {
 }
 
 final class AuthFailure extends AuthResult {
-  AuthFailure(this.message);
+  AuthFailure(this.message, {this.code});
   final String message;
+  /// The raw Firebase error code (e.g. 'user-not-found', 'wrong-password').
+  /// Use this for programmatic routing decisions rather than parsing [message].
+  final String? code;
 }
 
 /// Lightweight user value object used across the app.

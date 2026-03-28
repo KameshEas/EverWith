@@ -22,7 +22,10 @@ import 'profile_setup_screen.dart';
 /// - All five fields validated with clear inline messages
 /// - Password strength indicator
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  const SignupScreen({super.key, this.prefillEmail});
+
+  /// Email pre-filled when redirected from Login (account not found).
+  final String? prefillEmail;
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -40,6 +43,14 @@ class _SignupScreenState extends State<SignupScreen> {
   final _phoneFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmPasswordFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefillEmail != null) {
+      _emailCtrl.text = widget.prefillEmail!;
+    }
+  }
 
   String? _nameError;
   String? _emailError;
@@ -159,12 +170,17 @@ class _SignupScreenState extends State<SignupScreen> {
     switch (result) {
       case AuthSuccess(:final user):
         if (!mounted) return;
+        // If the user already has a display name, skip profile setup
+        final needsProfile =
+            user.displayName == null || user.displayName!.trim().isEmpty;
         Navigator.of(context).pushReplacement(
           PageRouteBuilder<void>(
-            pageBuilder: (_, animation, __) => ProfileSetupScreen(
-              prefillName: user.displayName,
-              prefillEmail: user.email,
-            ),
+            pageBuilder: (_, animation, __) => needsProfile
+                ? ProfileSetupScreen(
+                    prefillName: user.displayName,
+                    prefillEmail: user.email,
+                  )
+                : HomeScreen(userName: user.displayName!),
             transitionsBuilder: (_, animation, __, child) =>
                 FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 500),
