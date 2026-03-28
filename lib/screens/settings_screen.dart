@@ -40,18 +40,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-      ),
       backgroundColor: AppColors.background,
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        children: [
-          const SizedBox(height: AppSpacing.xl),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          children: [
+            // ── Header ────────────────────────────────────────────────
+            const SizedBox(height: AppSpacing.sm),
+            Text('Settings',
+                style: AppTextStyles.heading.copyWith(fontSize: 32)),
+            const SizedBox(height: 4),
+            Text('Manage your preferences',
+                style: AppTextStyles.body.copyWith(fontSize: 15)),
+            const SizedBox(height: AppSpacing.xl),
           _EditableProfileHeader(
             user: _user,
             onProfileUpdated: _refreshUser,
@@ -76,6 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const _AppVersionFooter(),
           const SizedBox(height: AppSpacing.xxl),
         ],
+      ),
       ),
     );
   }
