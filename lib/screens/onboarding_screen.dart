@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/app_assets.dart';
+import '../core/constants/app_languages.dart';
 import '../core/constants/app_spacing.dart';
+import '../core/settings/accessibility_settings.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../widgets/app_header_icon_button.dart';
@@ -11,27 +13,6 @@ import '../widgets/app_logo.dart';
 import '../widgets/gradient_primary_button.dart';
 import '../widgets/pill_chip.dart';
 import 'login_screen.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Supported languages
-// ─────────────────────────────────────────────────────────────────────────────
-class _Language {
-  const _Language({required this.name, required this.flag, required this.code});
-  final String name;
-  final String flag;
-  final String code;
-}
-
-const List<_Language> _kLanguages = [
-  _Language(name: 'English', flag: '🇺🇸', code: 'en'),
-  _Language(name: 'Spanish', flag: '🇪🇸', code: 'es'),
-  _Language(name: 'French', flag: '🇫🇷', code: 'fr'),
-  _Language(name: 'Hindi', flag: '🇮🇳', code: 'hi'),
-  _Language(name: 'Tamil', flag: '🇮🇳', code: 'ta'),
-  _Language(name: 'Chinese', flag: '🇨🇳', code: 'zh'),
-  _Language(name: 'Arabic', flag: '🇸🇦', code: 'ar'),
-  _Language(name: 'Portuguese', flag: '🇧🇷', code: 'pt'),
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Font-size presets
@@ -69,7 +50,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   late final Animation<double> _pulseAnim;
 
   // ── User preferences (persisted per session) ─────────────────────────────
-  _Language _selectedLanguage = _kLanguages.first;
+  AppLanguage _selectedLanguage = kAppLanguages.first;
   _FontSizePreset _fontSizePreset = _FontSizePreset.normal;
   bool _highContrast = false;
   bool _textToSpeech = false;
@@ -118,9 +99,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _LanguageSheet(
         selected: _selectedLanguage,
-        onSelected: (lang) {
+        onSelected: (lang) async {
           setState(() => _selectedLanguage = lang);
-          Navigator.of(context).pop();
+          await AccessibilitySettings.instance.setLanguage(lang.code);
+          // ignore: use_build_context_synchronously
+          if (mounted) Navigator.of(context).pop();
         },
       ),
     );
@@ -216,7 +199,7 @@ class _OnboardingHeader extends StatelessWidget {
     required this.onLanguageTap,
   });
 
-  final _Language selectedLanguage;
+  final AppLanguage selectedLanguage;
   final VoidCallback onAccessibilityTap;
   final VoidCallback onLanguageTap;
 
@@ -649,8 +632,8 @@ class _LanguageSheet extends StatelessWidget {
     required this.onSelected,
   });
 
-  final _Language selected;
-  final ValueChanged<_Language> onSelected;
+  final AppLanguage selected;
+  final ValueChanged<AppLanguage> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -658,7 +641,7 @@ class _LanguageSheet extends StatelessWidget {
       title: 'Choose Language',
       icon: Icons.translate_rounded,
       child: Column(
-        children: _kLanguages.map((lang) {
+        children: kAppLanguages.map((lang) {
           final isSelected = lang.code == selected.code;
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),

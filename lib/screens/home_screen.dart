@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../core/auth/auth_service.dart';
+import '../core/constants/app_languages.dart';
 import '../core/constants/app_spacing.dart';
 import '../core/services/wake_word_service.dart';
 import '../core/settings/accessibility_settings.dart';
@@ -665,30 +666,8 @@ class _ActionCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Language data & helpers
+//  Language helpers
 // ─────────────────────────────────────────────────────────────────────────────
-class _LangOption {
-  const _LangOption(this.code, this.name, this.flag);
-  final String code;
-  final String name;
-  final String flag;
-}
-
-const _kLanguages = [
-  _LangOption('en', 'English', '🇺🇸'),
-  _LangOption('es', 'Spanish', '🇪🇸'),
-  _LangOption('fr', 'French', '🇫🇷'),
-  _LangOption('hi', 'Hindi', '🇮🇳'),
-  _LangOption('ta', 'Tamil', '🇮🇳'),
-  _LangOption('zh', 'Chinese', '🇨🇳'),
-  _LangOption('ar', 'Arabic', '🇸🇦'),
-  _LangOption('pt', 'Portuguese', '🇧🇷'),
-];
-
-_LangOption _langByCode(String code) =>
-    _kLanguages.firstWhere((l) => l.code == code,
-        orElse: () => _kLanguages.first);
-
 void _showLanguageSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
@@ -709,7 +688,7 @@ class _LanguageButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lang = _langByCode(languageCode);
+    final lang = appLanguageByCode(languageCode);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -798,7 +777,7 @@ class _LanguageSheetState extends State<_LanguageSheet> {
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
-              children: _kLanguages.map((lang) {
+              children: kAppLanguages.map((lang) {
                 final isSelected = lang.code == _selected;
                 return GestureDetector(
                   onTap: () async {
