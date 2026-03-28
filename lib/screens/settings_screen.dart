@@ -5,6 +5,7 @@ import 'package:everwith/core/auth/auth_result.dart';
 import 'package:everwith/core/constants/app_spacing.dart';
 import 'package:everwith/core/theme/app_colors.dart';
 import 'package:everwith/core/theme/app_text_styles.dart';
+import '../main.dart' show AuthGate;
 import 'login_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -171,7 +172,10 @@ class _SignOutTile extends StatelessWidget {
           ),
         );
         if (confirmed != true) return;
+        // Pause the auth gate so the listener doesn't also navigate
+        AuthGate.instance.pause();
         await AuthService.instance.signOut();
+        AuthGate.instance.resume();
         if (context.mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginScreen()),
