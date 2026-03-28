@@ -12,7 +12,7 @@ import '../widgets/app_header_icon_button.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/gradient_primary_button.dart';
 import '../widgets/pill_chip.dart';
-import 'login_screen.dart';
+import 'permissions_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Font-size presets
@@ -123,9 +123,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('seen_onboarding', true);
     if (!mounted) return;
+    // ignore: use_build_context_synchronously
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
-        pageBuilder: (_, animation, __) => const LoginScreen(),
+        pageBuilder: (_, animation, __) => const PermissionsScreen(),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: animation,
           child: child,

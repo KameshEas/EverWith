@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/auth/auth_result.dart';
 import '../core/auth/auth_service.dart';
@@ -11,6 +12,7 @@ import '../widgets/auth_text_field.dart';
 import '../widgets/gradient_primary_button.dart';
 import '../widgets/google_sign_in_button.dart';
 import 'home_screen.dart';
+import 'permissions_screen.dart';
 import 'profile_setup_screen.dart';
 
 /// Signup screen for EverWith.
@@ -145,6 +147,8 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _onSignup() async {
+    // Guard: mic permission required
+    if (!await _checkMicPermission()) return;
     if (!_validate()) return;
     setState(() => _isLoading = true);
     final result = await AuthService.instance.createAccountWithEmail(
@@ -162,7 +166,36 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  Future<bool> _checkMicPermission() async {
+    final status = await Permission.microphone.status;
+    if (status.isGranted) return true;
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+            'Microphone permission is required to create an account.'),
+        backgroundColor: AppColors.errorRed,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+        action: SnackBarAction(
+          label: 'Grant',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute<void>(
+                  builder: (_) => const PermissionsScreen()),
+            );
+          },
+        ),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _onGoogleSignIn() async {
+    // Guard: mic permission required
+    if (!await _checkMicPermission()) return;
     setState(() => _isGoogleLoading = true);
     final result = await AuthService.instance.signInWithGoogle();
     if (!mounted) return;

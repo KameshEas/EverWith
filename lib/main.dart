@@ -15,6 +15,7 @@ import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/permissions_screen.dart';
 import 'screens/splash_screen.dart';
 
 /// Global navigator key — lets the auth gate redirect from outside widget tree.
@@ -108,6 +109,7 @@ class _AppEntryState extends State<_AppEntry> {
   Future<void> _resolveDestination() async {
     final prefs = await SharedPreferences.getInstance();
     final seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
+    final seenPermissions = prefs.getBool('seen_permissions') ?? false;
     final currentUser = FirebaseAuth.instance.currentUser;
 
     Widget dest;
@@ -118,10 +120,12 @@ class _AppEntryState extends State<_AppEntry> {
         userName: currentUser.displayName ?? 'Friend',
         autoListen: autoListen,
       );
-    } else if (seenOnboarding) {
+    } else if (seenOnboarding && seenPermissions) {
       bool notLoggedIn = false;
       try { notLoggedIn = await WakeWordService.instance.getNotLoggedIn(); } catch (_) {}
       dest = LoginScreen(wakeWordNotLoggedIn: notLoggedIn);
+    } else if (seenOnboarding && !seenPermissions) {
+      dest = const PermissionsScreen();
     } else {
       dest = const OnboardingScreen();
     }
