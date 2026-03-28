@@ -30,6 +30,11 @@ class AuthService {
   /// The currently signed-in user, or `null`.
   AuthUser? get currentUser => _mapUser(_auth.currentUser);
 
+  /// True when the current user signed in with email / password.
+  bool get isEmailUser =>
+      _auth.currentUser?.providerData.any((p) => p.providerId == 'password') ??
+      false;
+
   // ── Email / Password ────────────────────────────────────────────────────
 
   /// Sign in with [email] and [password].
@@ -117,6 +122,14 @@ class AuthService {
     } catch (_) {
       return AuthFailure(authErrorMessage('unknown'));
     }
+  }
+
+  // ── Profile update ──────────────────────────────────────────────────────
+
+  /// Update the display name of the currently signed-in user.
+  Future<void> updateDisplayName(String name) async {
+    await _auth.currentUser?.updateDisplayName(name.trim());
+    await _auth.currentUser?.reload();
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────
