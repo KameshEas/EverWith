@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'settings_screen.dart';
 
 import '../core/constants/app_spacing.dart';
@@ -26,7 +27,10 @@ class _HomeScreenState extends State<HomeScreen>
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
 
+  final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
+  bool _speechAvailable = false;
+  String _recognizedText = '';
 
   @override
   void initState() {
@@ -39,28 +43,75 @@ class _HomeScreenState extends State<HomeScreen>
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    _speechAvailable = await _speech.initialize(
+      onError: (e) => _onSpeechError(e.errorMsg),
+      onStatus: (status) {
+        if (status == stt.SpeechToText.notListeningStatus) {
+          if (mounted) setState(() => _isListening = false);
+        }
+      },
+    );
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _pulseCtrl.dispose();
+    _speech.cancel();
     super.dispose();
   }
 
-  void _onMicPressed() {
-    setState(() => _isListening = !_isListening);
+  Future<void> _onMicPressed() async {
+    if (!_speechAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Speech recognition not available on this device.',
+              style: TextStyle(fontSize: 16)),
+          backgroundColor: AppColors.errorRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+        ),
+      );
+      return;
+    }
+
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+    } else {
+      setState(() {
+        _isListening = true;
+        _recognizedText = '';
+      });
+      await _speech.listen(
+        onResult: (result) {
+          if (mounted) {
+            setState(() => _recognizedText = result.recognizedWords);
+          }
+        },
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 4),
+        localeId: 'en_US',
+      );
+    }
+  }
+
+  void _onSpeechError(String error) {
+    if (!mounted) return;
+    setState(() => _isListening = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          _isListening ? 'Listening… say a command.' : 'Stopped listening.',
-          style: const TextStyle(fontSize: 16),
-        ),
-        duration: const Duration(seconds: 2),
-        backgroundColor: AppColors.primaryBlue,
+        content: Text('Speech error: $error', style: const TextStyle(fontSize: 16)),
+        backgroundColor: AppColors.errorRed,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        ),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
       ),
     );
   }
@@ -102,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen>
                   pulseAnim: _pulseAnim,
                   isListening: _isListening,
                   onTap: _onMicPressed,
+                  recognizedText: _recognizedText,
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 const _QuickActionsGrid(),
@@ -214,11 +266,13 @@ class _MicSection extends StatelessWidget {
     required this.pulseAnim,
     required this.isListening,
     required this.onTap,
+    required this.recognizedText,
   });
 
   final Animation<double> pulseAnim;
   final bool isListening;
   final VoidCallback onTap;
+  final String recognizedText;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +333,32 @@ class _MicSection extends StatelessWidget {
             ),
           ),
         ),
+        if (recognizedText.isNotEmpty) ...
+          [
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.cardWhite,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadow.withAlpha(25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Text(
+                recognizedText,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.body.copyWith(
+                    fontSize: 18, color: AppColors.textDark),
+              ),
+            ),
+          ],
       ],
     );
   }
