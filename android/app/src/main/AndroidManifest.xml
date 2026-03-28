@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <application
-        android:label="everwith"
+        android:label="EverWith"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data

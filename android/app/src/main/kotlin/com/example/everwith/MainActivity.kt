@@ -25,8 +25,9 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "start" -> {
-                        requestOverlayPermissionIfNeeded()
                         startWakeWordService()
+                        // Request overlay permission separately — do NOT block service start
+                        requestOverlayPermissionIfNeeded()
                         result.success(null)
                     }
                     "stop" -> {
@@ -108,7 +109,12 @@ class MainActivity : FlutterActivity() {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
             )
-            startActivityForResult(intent, OVERLAY_REQUEST_CODE)
+            try {
+                @Suppress("DEPRECATION")
+                startActivityForResult(intent, OVERLAY_REQUEST_CODE)
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Could not open overlay settings: ${e.message}")
+            }
         }
     }
 
