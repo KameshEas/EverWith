@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/services/family_service.dart';
 import 'core/services/medicine_service.dart';
 import 'core/services/wake_word_service.dart';
 import 'core/settings/notification_settings.dart';
@@ -29,6 +30,7 @@ void main() async {
   await AccessibilitySettings.instance.load();
   await NotificationSettings.instance.load();
   await MedicineService.instance.init();
+  await FamilyService.instance.load();
   runApp(const EverWithApp());
 }
 

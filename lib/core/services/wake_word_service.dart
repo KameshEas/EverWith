@@ -23,6 +23,12 @@ class WakeWordService {
   Future<void> start() => _methodChannel.invokeMethod<void>('start');
   Future<void> stop() => _methodChannel.invokeMethod<void>('stop');
 
+  /// Release the mic without stopping the service (fast — no service restart).
+  Future<void> pause() => _methodChannel.invokeMethod<void>('pause');
+
+  /// Reclaim the mic after Flutter STT is done.
+  Future<void> resume() => _methodChannel.invokeMethod<void>('resume');
+
   /// Asks the OS to show the "Display over other apps" settings page.
   /// Must be called once (e.g. at first launch) so the service can
   /// directly open the app when a wake word is detected.

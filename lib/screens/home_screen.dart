@@ -10,6 +10,7 @@ import '../core/constants/app_spacing.dart';
 import '../core/services/wake_word_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
+import 'family_screen.dart';
 import 'medicines_screen.dart';
 import 'settings_screen.dart';
 
@@ -92,7 +93,11 @@ class _HomeScreenState extends State<HomeScreen>
       onError: (e) => _onSpeechError(e.errorMsg),
       onStatus: (status) {
         if (status == stt.SpeechToText.notListeningStatus) {
-          if (mounted) setState(() => _isListening = false);
+          if (mounted) {
+            setState(() => _isListening = false);
+            // Give back the mic to wake-word detection
+            try { WakeWordService.instance.resume(); } catch (_) {}
+          }
         }
       },
     );
@@ -126,6 +131,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _activateMic() async {
     if (!_speechAvailable || _isListening) return;
+    // Release the mic from wake-word detection first
+    try { await WakeWordService.instance.pause(); } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 300));
     setState(() {
       _isListening = true;
       _recognizedText = '';
@@ -168,7 +176,12 @@ class _HomeScreenState extends State<HomeScreen>
     if (_isListening) {
       await _speech.stop();
       setState(() => _isListening = false);
+      // Give back the mic to wake-word detection
+      try { await WakeWordService.instance.resume(); } catch (_) {}
     } else {
+      // Release the mic from wake-word detection first
+      try { await WakeWordService.instance.pause(); } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 300));
       setState(() {
         _isListening = true;
         _recognizedText = '';
@@ -189,6 +202,8 @@ class _HomeScreenState extends State<HomeScreen>
   void _onSpeechError(String error) {
     if (!mounted) return;
     setState(() => _isListening = false);
+    // Resume wake-word detection after any error
+    try { WakeWordService.instance.resume(); } catch (_) {}
   }
 
   // ===== Navigation =========================================================
@@ -203,7 +218,7 @@ class _HomeScreenState extends State<HomeScreen>
       case 1:
         return const MedicinesScreen();
       case 3:
-        return const _FamilyPlaceholder();
+        return const FamilyScreen();
       case 4:
         return const SettingsScreen();
       default:
@@ -656,65 +671,6 @@ class _ActionCard extends StatelessWidget {
                   color: chevronColor ?? AppColors.iconMuted, size: 24),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Placeholder tabs
-// ─────────────────────────────────────────────────────────────────────────────
-class _MedicinesPlaceholder extends StatelessWidget {
-  const _MedicinesPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.medication_rounded,
-                size: 64, color: AppColors.primaryBlueLight),
-            SizedBox(height: AppSpacing.md),
-            Text('Medicines',
-                style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark)),
-            SizedBox(height: 8),
-            Text('Coming soon',
-                style: TextStyle(fontSize: 16, color: AppColors.textGray)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FamilyPlaceholder extends StatelessWidget {
-  const _FamilyPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.group_rounded,
-                size: 64, color: AppColors.primaryBlueLight),
-            SizedBox(height: AppSpacing.md),
-            Text('Family',
-                style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark)),
-            SizedBox(height: 8),
-            Text('Coming soon',
-                style: TextStyle(fontSize: 16, color: AppColors.textGray)),
-          ],
         ),
       ),
     );

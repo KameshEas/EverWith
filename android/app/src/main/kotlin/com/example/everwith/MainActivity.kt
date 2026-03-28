@@ -34,6 +34,15 @@ class MainActivity : FlutterActivity() {
                         stopService(Intent(this, WakeWordService::class.java))
                         result.success(null)
                     }
+                    "pause" -> {
+                        // Stop only the recognizer — service stays alive, no expensive restart
+                        WakeWordService.serviceInstance?.pauseListening()
+                        result.success(null)
+                    }
+                    "resume" -> {
+                        WakeWordService.serviceInstance?.resumeListening()
+                        result.success(null)
+                    }
                     "requestOverlayPermission" -> {
                         requestOverlayPermissionIfNeeded()
                         result.success(null)

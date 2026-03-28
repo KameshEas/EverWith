@@ -45,6 +45,8 @@
 	<string>EverWith needs access to your photo library to let you set a profile picture.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>EverWith needs camera access to take a profile photo.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>EverWith needs access to your contacts to add family members you can call easily.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

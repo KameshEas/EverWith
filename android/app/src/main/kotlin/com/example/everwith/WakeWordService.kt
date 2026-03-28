@@ -49,6 +49,10 @@ class WakeWordService : Service() {
         @Volatile
         var eventSink: EventChannel.EventSink? = null
 
+        /** Live instance — set in onCreate/cleared in onDestroy. */
+        @Volatile
+        var serviceInstance: WakeWordService? = null
+
         // Full phrases for exact-contains matching
         val WAKE_PHRASES = listOf(
             "hey companion",
@@ -71,11 +75,13 @@ class WakeWordService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var active = false
+    private var paused = false
     private var recognizerBusy = false
     private var lastFireTimeMs = 0L
 
     override fun onCreate() {
         super.onCreate()
+        serviceInstance = this
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         tts = TextToSpeech(this) { /* init callback – no action needed */ }
@@ -91,10 +97,28 @@ class WakeWordService : Service() {
 
     override fun onDestroy() {
         active = false
+        serviceInstance = null
         tearDownRecognizer()
+        mainHandler.removeCallbacksAndMessages(null)
         tts?.stop()
         tts?.shutdown()
         super.onDestroy()
+    }
+
+    /** Release the mic without stopping the service. Flutter calls this before using STT. */
+    fun pauseListening() {
+        paused = true
+        mainHandler.removeCallbacksAndMessages(null)
+        tearDownRecognizer()
+        Log.d(TAG, "Wake word paused (mic released)")
+    }
+
+    /** Reclaim the mic after Flutter STT is done. */
+    fun resumeListening() {
+        if (!active) return
+        paused = false
+        Log.d(TAG, "Wake word resuming…")
+        mainHandler.postDelayed({ startListening() }, 400L)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -102,7 +126,7 @@ class WakeWordService : Service() {
     // ── SpeechRecognizer management ──────────────────────────────────────────
 
     private fun startListening() {
-        if (!active || recognizerBusy) return
+        if (!active || recognizerBusy || paused) return
 
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             Log.w(TAG, "SpeechRecognizer not available on this device")
