@@ -21,7 +21,9 @@ import 'signup_screen.dart';
 /// - Inline validation with clear error messages
 /// - Single-column, scroll-safe layout for accessibility
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.wakeWordNotLoggedIn = false});
+
+  final bool wakeWordNotLoggedIn;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -38,6 +40,27 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _passwordError;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.wakeWordNotLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Please sign in to use voice commands.',
+              style: TextStyle(fontSize: 16),
+            ),
+            backgroundColor: const Color(0xFFF59E0B),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../core/services/wake_word_service.dart';
 import 'settings_screen.dart';
 
 import '../core/constants/app_spacing.dart';
@@ -14,9 +15,10 @@ import '../widgets/app_logo.dart';
 //  interface: a prominent mic button and quick-action cards.
 // ─────────────────────────────────────────────────────────────────────────────
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.userName = 'Friend'});
+  const HomeScreen({super.key, this.userName = 'Friend', this.autoListen = false});
 
   final String userName;
+  final bool autoListen;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -31,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isListening = false;
   bool _speechAvailable = false;
   String _recognizedText = '';
+  bool _wakeWordActive = false; // banner shown after wake word fires
 
   @override
   void initState() {
@@ -45,6 +48,22 @@ class _HomeScreenState extends State<HomeScreen>
     );
 
     _initSpeech();
+    _subscribeToWakeWord();
+    if (widget.autoListen) {
+      // Slight delay to let STT initialize
+      Future.delayed(const Duration(milliseconds: 800), _activateMic);
+    }
+    // Also poll via method channel — handles the case where the app was
+    // launched cold from the heads-up notification and onResume fires
+    // before the EventChannel stream was subscribed.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final autoListen = await WakeWordService.instance.getAutoListen();
+        if (autoListen && mounted) {
+          Future.delayed(const Duration(milliseconds: 900), _activateMic);
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _initSpeech() async {
@@ -58,6 +77,55 @@ class _HomeScreenState extends State<HomeScreen>
     );
     if (mounted) setState(() {});
   }
+
+  Future<void> _subscribeToWakeWord() async {
+    try {
+      WakeWordService.instance.onWakeWordDetected.listen((phrase) {
+        if (!mounted) return;
+        // Show a brief banner then auto-start STT
+        setState(() {
+          _wakeWordActive = true;
+          _recognizedText = '';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '"${_capitalize(phrase)}" detected — listening!',
+              style: const TextStyle(fontSize: 16),
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+          ),
+        );
+        Future.delayed(const Duration(milliseconds: 300), _activateMic);
+      });
+    } catch (_) {
+      // Wake word service not available (e.g. iOS/web) — silently ignore
+    }
+  }
+
+  Future<void> _activateMic() async {
+    if (!_speechAvailable || _isListening) return;
+    setState(() {
+      _isListening = true;
+      _wakeWordActive = false;
+      _recognizedText = '';
+    });
+    await _speech.listen(
+      onResult: (result) {
+        if (mounted) setState(() => _recognizedText = result.recognizedWords);
+      },
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 4),
+      localeId: 'en_US',
+    );
+  }
+
+  String _capitalize(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   @override
   void dispose() {
