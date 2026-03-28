@@ -177,14 +177,36 @@ class WakeWordService : Service() {
         }
 
         override fun onError(error: Int) {
+            val errorName = when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH          -> "ERROR_NO_MATCH"
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT    -> "ERROR_SPEECH_TIMEOUT"
+                SpeechRecognizer.ERROR_AUDIO             -> "ERROR_AUDIO"
+                SpeechRecognizer.ERROR_NETWORK           -> "ERROR_NETWORK"
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT   -> "ERROR_NETWORK_TIMEOUT"
+                SpeechRecognizer.ERROR_SERVER            -> "ERROR_SERVER"
+                SpeechRecognizer.ERROR_CLIENT            -> "ERROR_CLIENT"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS"
+                7 /* ERROR_RECOGNIZER_BUSY */            -> "ERROR_RECOGNIZER_BUSY"
+                9 /* ERROR_SERVER_DISCONNECTED (API 23+) */ -> "ERROR_SERVER_DISCONNECTED"
+                else                                     -> "ERROR_$error"
+            }
             val delayMs = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 150L  // quick retry on silence
-                SpeechRecognizer.ERROR_AUDIO          -> 500L
-                SpeechRecognizer.ERROR_NETWORK        -> 2_000L
-                else                                  -> 400L
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT    -> 150L   // silence — quick retry
+                SpeechRecognizer.ERROR_AUDIO             -> 500L
+                SpeechRecognizer.ERROR_NETWORK,
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT   -> 3_000L // wait for connectivity
+                SpeechRecognizer.ERROR_SERVER            -> 3_000L
+                9 /* ERROR_SERVER_DISCONNECTED */        -> 2_000L // server closed stream — small pause then reconnect
+                7 /* ERROR_RECOGNIZER_BUSY */            -> 1_000L // recognizer in use — wait longer
+                else                                     -> 500L
             }
-            Log.d(TAG, "Recognition error ${error} – restarting in ${delayMs}ms")
+            Log.d(TAG, "Recognition $errorName ($error) – restarting in ${delayMs}ms")
+            // Fully destroy recognizer on server/client errors to get a fresh connection
+            if (error == 9 || error == SpeechRecognizer.ERROR_SERVER ||
+                error == SpeechRecognizer.ERROR_CLIENT) {
+                tearDownRecognizer()
+            }
             scheduleRestart(delayMs)
         }
     }
@@ -332,12 +354,6 @@ class WakeWordService : Service() {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
             nm.canUseFullScreenIntent()) {
-            builder.setFullScreenIntent(pendingIntent, true)
-        }
-
-        nm.notify(ALERT_NOTIFICATION_ID, builder.build())
-        Log.d(TAG, "launchApp: alert notification posted")
-    }
             builder.setFullScreenIntent(pendingIntent, true)
         }
 
