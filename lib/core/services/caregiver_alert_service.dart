@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'alarm_notification_service.dart';
 import 'family_service.dart';
 import 'sms_service.dart';
 
@@ -48,7 +49,15 @@ class CaregiverAlertService {
       message: message,
     );
 
-    if (sent) await _recordAlert(alertKey);
+    if (sent) {
+      await _recordAlert(alertKey);
+      // Fire a loud alarm notification on the parent's device too
+      await AlarmNotificationService.instance.showMissedMedicineAlarm(
+        medicineName: medicineName,
+        scheduledTime: scheduledTime,
+        caregiverName: caregiver.name,
+      );
+    }
     return sent;
   }
 
@@ -70,7 +79,13 @@ class CaregiverAlertService {
       message: message,
     );
 
-    if (sent) await _recordAlert('emergency_${DateTime.now().millisecondsSinceEpoch}');
+    if (sent) {
+      await _recordAlert('emergency_${DateTime.now().millisecondsSinceEpoch}');
+      // Fire a loud alarm notification on the parent's device
+      await AlarmNotificationService.instance.showEmergencyAlarm(
+        caregiverName: caregiver.name,
+      );
+    }
     return sent;
   }
 
