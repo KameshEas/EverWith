@@ -1,10 +1,13 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/alert_entry.dart';
 import 'alarm_notification_service.dart';
 import 'family_service.dart';
+import 'firestore_service.dart';
 import 'sms_service.dart';
 
 /// The type of alert being sent to the caregiver.
@@ -51,6 +54,12 @@ class CaregiverAlertService {
 
     if (sent) {
       await _recordAlert(alertKey);
+      // Push to Firestore for caregiver dashboard
+      _pushAlertToFirestore(
+        type: AlertEntryType.missedMedicine,
+        message: message,
+        medicineName: medicineName,
+      );
       // Fire a loud alarm notification on the parent's device too
       await AlarmNotificationService.instance.showMissedMedicineAlarm(
         medicineName: medicineName,
@@ -81,6 +90,11 @@ class CaregiverAlertService {
 
     if (sent) {
       await _recordAlert('emergency_${DateTime.now().millisecondsSinceEpoch}');
+      // Push to Firestore for caregiver dashboard
+      _pushAlertToFirestore(
+        type: AlertEntryType.emergency,
+        message: message,
+      );
       // Fire a loud alarm notification on the parent's device
       await AlarmNotificationService.instance.showEmergencyAlarm(
         caregiverName: caregiver.name,
@@ -90,6 +104,28 @@ class CaregiverAlertService {
   }
 
   // ── Rate-limiting helpers ────────────────────────────────────────────────
+
+  /// Best-effort push of the alert to Firestore for caregiver dashboard.
+  void _pushAlertToFirestore({
+    required AlertEntryType type,
+    required String message,
+    String? medicineName,
+  }) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    FirestoreService.instance
+        .pushAlertEntry(
+          uid,
+          AlertEntry(
+            id: '',
+            type: type,
+            medicineName: medicineName,
+            message: message,
+            timestamp: DateTime.now(),
+          ),
+        )
+        .catchError((_) {});
+  }
 
   String get _todayKey {
     final now = DateTime.now();

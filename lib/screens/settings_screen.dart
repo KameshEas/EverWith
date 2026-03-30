@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:everwith/core/auth/auth_result.dart';
 import 'package:everwith/core/auth/auth_service.dart';
 import 'package:everwith/core/constants/app_spacing.dart';
+import 'package:everwith/core/services/firestore_service.dart';
 import 'package:everwith/core/settings/accessibility_settings.dart';
 import 'package:everwith/core/theme/app_colors.dart';
 import 'package:everwith/core/theme/app_text_styles.dart';
@@ -62,6 +63,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _SectionLabel('Accessibility'),
           const SizedBox(height: AppSpacing.md),
           _AccessibilityToggles(),
+          const SizedBox(height: AppSpacing.xl),
+          _SectionLabel('Caregiver Link'),
+          const SizedBox(height: AppSpacing.md),
+          _PairingCodeTile(uid: _user?.uid),
           const SizedBox(height: AppSpacing.xl),
           _SectionLabel('Account'),
           const SizedBox(height: AppSpacing.md),
@@ -635,6 +640,124 @@ class _EmergencyContactTileState extends State<_EmergencyContactTile> {
 // ===========================================================================
 // App Version Footer
 // ===========================================================================
+
+// ── Pairing code tile ───────────────────────────────────────────────────
+
+class _PairingCodeTile extends StatefulWidget {
+  const _PairingCodeTile({required this.uid});
+  final String? uid;
+
+  @override
+  State<_PairingCodeTile> createState() => _PairingCodeTileState();
+}
+
+class _PairingCodeTileState extends State<_PairingCodeTile> {
+  String? _code;
+  bool _loading = false;
+
+  Future<void> _generate() async {
+    final uid = widget.uid;
+    if (uid == null) return;
+    setState(() => _loading = true);
+    try {
+      final code = await FirestoreService.instance.generatePairingCode(uid);
+      if (mounted) setState(() => _code = code);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to generate code')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Share with caregiver',
+            style: AppTextStyles.inputLabel.copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Generate a code your caregiver can enter to link their app with yours.',
+            style: AppTextStyles.body.copyWith(
+              fontSize: 14,
+              color: AppColors.textGray,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (_code != null) ...[
+            Center(
+              child: SelectableText(
+                _code!,
+                style: AppTextStyles.heading.copyWith(
+                  fontSize: 36,
+                  letterSpacing: 8,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Center(
+              child: Text(
+                'Code expires in 24 hours',
+                style: AppTextStyles.body.copyWith(
+                  fontSize: 13,
+                  color: AppColors.textGray,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: _loading ? null : _generate,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.link),
+              label: Text(_code != null ? 'Generate new code' : 'Generate code'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                side: const BorderSide(color: AppColors.primaryBlue),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                textStyle: AppTextStyles.body.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _AppVersionFooter extends StatefulWidget {
   const _AppVersionFooter();

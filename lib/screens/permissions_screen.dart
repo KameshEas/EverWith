@@ -7,7 +7,7 @@ import '../core/constants/app_spacing.dart';
 import '../core/services/wake_word_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
-import 'login_screen.dart';
+import 'role_selection_screen.dart';
 
 class PermissionsScreen extends StatefulWidget {
   const PermissionsScreen({super.key});
@@ -113,8 +113,8 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     // ignore: use_build_context_synchronously
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
-        pageBuilder: (_, animation, __) => const LoginScreen(),
-        transitionsBuilder: (_, animation, __, child) =>
+        pageBuilder: (_, animation, __) => const RoleSelectionScreen(),
+        transitionsBuilder: (_, animation, __ , child) =>
             FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 400),
       ),

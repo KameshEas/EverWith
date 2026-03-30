@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/auth/auth_result.dart';
 import '../core/auth/auth_service.dart';
 import '../core/constants/app_spacing.dart';
+import '../core/models/user_profile.dart';
+import '../core/services/firestore_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/gradient_primary_button.dart';
 import '../widgets/google_sign_in_button.dart';
+import 'caregiver/caregiver_home_screen.dart';
+import 'caregiver/caregiver_pairing_screen.dart';
 import 'home_screen.dart';
 import 'profile_setup_screen.dart';
 import 'signup_screen.dart';
@@ -112,8 +117,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     switch (result) {
-      case AuthSuccess():
-        _navigateToHome();
+      case AuthSuccess(:final user):
+        await _routeByRole(user.uid, user.displayName);
       case AuthFailure(:final message, :final code):
         // If no account exists for this email, push to Signup with email pre-filled
         if (code == 'user-not-found' || code == 'invalid-credential') {
@@ -132,7 +137,38 @@ class _LoginScreenState extends State<LoginScreen> {
     switch (result) {
       case AuthSuccess(:final user):
         if (!mounted) return;
-        // If the user already has a display name, skip profile setup
+        // Check if the user already has a Firestore profile
+        var profile =
+            await FirestoreService.instance.getUserProfile(user.uid);
+        if (!mounted) return;
+
+        // New Google user — create Firestore profile
+        if (profile == null) {
+          final prefs = await SharedPreferences.getInstance();
+          final roleName = prefs.getString('user_role');
+          final role =
+              roleName == 'caregiver' ? UserRole.caregiver : UserRole.elder;
+          profile = UserProfile(
+            uid: user.uid,
+            name: user.displayName ?? '',
+            email: user.email,
+            role: role,
+            photoUrl: user.photoUrl,
+            createdAt: DateTime.now(),
+          );
+          await FirestoreService.instance.createUserProfile(profile);
+          if (!mounted) return;
+        }
+
+        if (profile.role == UserRole.caregiver) {
+          _navigateToCaregiverHome(
+            user.uid,
+            user.displayName ?? profile.name,
+            profile.linkedElderUid,
+          );
+          return;
+        }
+        // Elder — regular flow
         final needsProfile =
             user.displayName == null || user.displayName!.trim().isEmpty;
         Navigator.of(context).pushReplacement(
@@ -151,6 +187,27 @@ class _LoginScreenState extends State<LoginScreen> {
       case AuthFailure(:final message):
         _showError(message);
     }
+  }
+
+  Future<void> _routeByRole(String uid, String? displayName) async {
+    final profile = await FirestoreService.instance.getUserProfile(uid);
+    if (!mounted) return;
+    if (profile != null && profile.role == UserRole.caregiver) {
+      _navigateToCaregiverHome(uid, displayName ?? profile.name, profile.linkedElderUid);
+    } else {
+      _navigateToHome();
+    }
+  }
+
+  void _navigateToCaregiverHome(
+      String uid, String name, String? elderUid) {
+    final Widget dest = elderUid != null
+        ? CaregiverHomeScreen(caregiverName: name, elderUid: elderUid)
+        : CaregiverPairingScreen(caregiverUid: uid, caregiverName: name);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => dest),
+      (_) => false,
+    );
   }
 
   void _navigateToHome() {
