@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/services/family_service.dart';
 import 'core/services/medicine_service.dart';
+import 'core/services/medicine_monitor_service.dart';
 import 'core/services/wake_word_service.dart';
 import 'core/settings/notification_settings.dart';
 import 'core/settings/accessibility_settings.dart';
@@ -32,6 +34,7 @@ void main() async {
   await NotificationSettings.instance.load();
   await MedicineService.instance.init();
   await FamilyService.instance.load();
+  MedicineMonitorService.instance.start();
   runApp(const EverWithApp());
 }
 
@@ -223,8 +226,15 @@ class _WakeWordStarterState extends State<_WakeWordStarter> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WakeWordService.instance.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Only start the foreground microphone service if RECORD_AUDIO is granted.
+      // On Android 14+ (targetSdk 36) starting without the permission crashes.
+      final granted = await Permission.microphone.isGranted;
+      if (granted) {
+        WakeWordService.instance.start();
+      }
+      // If not granted yet the PermissionsScreen will grant it; HomeScreen
+      // calls start() again after permission is confirmed.
     });
   }
 

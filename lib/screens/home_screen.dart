@@ -1,13 +1,18 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../core/services/tts_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../core/auth/auth_service.dart';
 import '../core/constants/app_languages.dart';
 import '../core/constants/app_spacing.dart';
+import '../core/services/caregiver_alert_service.dart';
+import '../core/services/family_service.dart';
 import '../core/services/wake_word_service.dart';
 import '../core/settings/accessibility_settings.dart';
 import '../core/theme/app_colors.dart';
@@ -34,7 +39,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   // ── Bottom nav index ────────────────────────────────────────────────────
   int _selectedIndex = 0;
 
@@ -48,9 +53,19 @@ class _HomeScreenState extends State<HomeScreen>
   bool _speechAvailable = false;
   String _recognizedText = '';
 
+  // ── Silence-detection for continuous listening ──────────────────────────
+  // When STT stops mid-utterance (Android server timeout) we restart it
+  // automatically until a real silence of [_silenceGap] elapses.
+  static const _silenceGap = Duration(seconds: 6);
+  DateTime? _lastWordTime;
+  bool _autoRelistening = false;
+
   // ── Profile photo (local cache) ─────────────────────────────────────────
   File? _profilePhoto;
 
+  // ── Text-to-speech ──────────────────────────────────────────────────────
+  final _tts = TtsService.instance;
+  bool get _isSpeaking => _tts.isSpeaking;
   @override
   void initState() {
     super.initState();
@@ -63,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen>
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
 
+    WidgetsBinding.instance.addObserver(this);
     _initSpeech();
     _subscribeToWakeWord();
     _loadProfilePhoto();
@@ -77,6 +93,34 @@ class _HomeScreenState extends State<HomeScreen>
           Future.delayed(const Duration(milliseconds: 900), _activateMic);
         }
       } catch (_) {}
+    });
+  }
+
+  // ── TTS helpers ─────────────────────────────────────────────────────────
+
+  /// Speaks a random greeting and calls [onDone] when TTS finishes.
+  Future<void> _speakGreeting({required VoidCallback onDone}) async {
+    if (!mounted) return;
+    final name = widget.userName.isNotEmpty ? widget.userName : 'there';
+    const greetings = [
+      'Hey {name}! What can I help you with today?',
+      'Hello {name}, how can I assist you right now?',
+      'Hi {name}! I am listening. What do you need?',
+    ];
+    final text = greetings[Random().nextInt(greetings.length)]
+        .replaceAll('{name}', name);
+
+    await _tts.speak(
+      text,
+      onDone: () { if (mounted) onDone(); },
+      onError: (_) { if (mounted) onDone(); },
+    );
+  }
+
+  /// Speaks greeting then immediately starts listen cycle.
+  Future<void> _speakGreetingThenListen() async {
+    await _speakGreeting(onDone: () {
+      if (mounted && _autoRelistening) _restartListenCycle();
     });
   }
 
@@ -95,15 +139,46 @@ class _HomeScreenState extends State<HomeScreen>
       onError: (e) => _onSpeechError(e.errorMsg),
       onStatus: (status) {
         if (status == stt.SpeechToText.notListeningStatus) {
-          if (mounted) {
-            setState(() => _isListening = false);
-            // Give back the mic to wake-word detection
-            try { WakeWordService.instance.resume(); } catch (_) {}
+          if (!mounted) return;
+          if (_autoRelistening) {
+            // Mid-speech restart — check if real silence has elapsed
+            final sinceLastWord = _lastWordTime == null
+                ? _silenceGap
+                : DateTime.now().difference(_lastWordTime!);
+            if (sinceLastWord < _silenceGap) {
+              // User is still speaking (just an Android recognizer timeout)
+              // — restart immediately and keep accumulating words
+              _restartListenCycle();
+              return;
+            }
           }
+          // Real silence — finalise
+          _autoRelistening = false;
+          _lastWordTime = null;
+          setState(() => _isListening = false);
+          try { WakeWordService.instance.resume(); } catch (_) {}
         }
       },
     );
     if (mounted) setState(() {});
+  }
+
+  /// Restarts a single STT cycle during continuous listening.
+  Future<void> _restartListenCycle() async {
+    if (!mounted || !_autoRelistening) return;
+    await _speech.listen(
+      onResult: (result) {
+        if (!mounted) return;
+        if (result.recognizedWords.isNotEmpty) {
+          _lastWordTime = DateTime.now();
+          setState(() => _recognizedText = result.recognizedWords);
+        }
+      },
+      listenFor: const Duration(seconds: 30),
+      pauseFor: _silenceGap,
+      localeId: 'en_US',
+      cancelOnError: false,
+    );
   }
 
   Future<void> _subscribeToWakeWord() async {
@@ -132,31 +207,53 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _activateMic() async {
-    if (!_speechAvailable || _isListening) return;
+    if (!_speechAvailable || _isListening || _isSpeaking) return;
     // Release the mic from wake-word detection first
     try { await WakeWordService.instance.pause(); } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    _lastWordTime = null;
+    _autoRelistening = true;
     setState(() {
       _isListening = true;
       _recognizedText = '';
     });
-    await _speech.listen(
-      onResult: (result) {
-        if (mounted) setState(() => _recognizedText = result.recognizedWords);
-      },
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 4),
-      localeId: 'en_US',
-    );
+    // Speak greeting first; STT starts only after greeting finishes
+    await _speakGreetingThenListen();
   }
 
   String _capitalize(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      // App going to background — stop STT and hand mic back to wake word service
+      if (_isSpeaking) {
+        _tts.stop();
+      }
+      if (_isListening) {
+        _autoRelistening = false;
+        _lastWordTime = null;
+        _speech.cancel();
+        setState(() => _isListening = false);
+      }
+      try { WakeWordService.instance.resume(); } catch (_) {}
+    }
+  }
+
+  @override
   void dispose() {
+    _autoRelistening = false;
+    WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     _speech.cancel();
+    _tts.stop();
+    _tts.dispose();
+    try { WakeWordService.instance.resume(); } catch (_) {}
     super.dispose();
   }
 
@@ -176,6 +273,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     if (_isListening) {
+      _autoRelistening = false;
+      _lastWordTime = null;
       await _speech.stop();
       setState(() => _isListening = false);
       // Give back the mic to wake-word detection
@@ -184,28 +283,80 @@ class _HomeScreenState extends State<HomeScreen>
       // Release the mic from wake-word detection first
       try { await WakeWordService.instance.pause(); } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 300));
+      _lastWordTime = null;
+      _autoRelistening = true;
       setState(() {
         _isListening = true;
         _recognizedText = '';
       });
-      await _speech.listen(
-        onResult: (result) {
-          if (mounted) {
-            setState(() => _recognizedText = result.recognizedWords);
-          }
-        },
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 4),
-        localeId: 'en_US',
-      );
+      await _restartListenCycle();
     }
   }
 
   void _onSpeechError(String error) {
     if (!mounted) return;
+    // Non-fatal errors (no match, timeout) may fire mid-speech — only stop if
+    // we are not in the middle of a continuous re-listen cycle.
+    if (_autoRelistening) {
+      final sinceLastWord = _lastWordTime == null
+          ? _silenceGap
+          : DateTime.now().difference(_lastWordTime!);
+      if (sinceLastWord < _silenceGap) {
+        // User was still speaking — restarting happens via onStatus callback;
+        // don't kill the UI state here.
+        return;
+      }
+    }
+    _autoRelistening = false;
+    _lastWordTime = null;
     setState(() => _isListening = false);
     // Resume wake-word detection after any error
     try { WakeWordService.instance.resume(); } catch (_) {}
+  }
+
+  // ===== Emergency SOS =======================================================
+
+  Future<void> _triggerEmergency() async {
+    final caregiver = FamilyService.instance.caregiver;
+    if (caregiver == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'No caregiver set. Go to Family and mark someone as your caregiver.',
+            style: TextStyle(fontSize: 15),
+          ),
+          backgroundColor: AppColors.errorRed,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+        ),
+      );
+      return;
+    }
+
+    final userName = widget.userName.isNotEmpty ? widget.userName : 'Your loved one';
+    final sent = await CaregiverAlertService.instance.alertEmergency(
+      userName: userName,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? 'Emergency alert sent to ${caregiver.name}!'
+              : 'Could not send alert. Check SMS permission.',
+          style: const TextStyle(fontSize: 15),
+        ),
+        backgroundColor: sent ? const Color(0xFF059669) : AppColors.errorRed,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+      ),
+    );
   }
 
   // ===== Navigation =========================================================
@@ -230,6 +381,7 @@ class _HomeScreenState extends State<HomeScreen>
           isListening: _isListening,
           recognizedText: _recognizedText,
           onNavigate: _onNavTap,
+          onEmergency: _triggerEmergency,
         );
     }
   }
@@ -438,6 +590,7 @@ class _HomeBody extends StatelessWidget {
     required this.isListening,
     required this.recognizedText,
     required this.onNavigate,
+    required this.onEmergency,
   });
 
   final String userName;
@@ -445,6 +598,7 @@ class _HomeBody extends StatelessWidget {
   final bool isListening;
   final String recognizedText;
   final void Function(int) onNavigate;
+  final VoidCallback onEmergency;
 
   String get _greeting {
     final h = DateTime.now().hour;
@@ -562,12 +716,13 @@ class _HomeBody extends StatelessWidget {
                 _ActionCard(
                   icon: Icons.sos_rounded,
                   label: 'Emergency',
-                  subtitle: 'Get immediate help',
+                  subtitle: 'Alert your caregiver now',
                   iconColor: AppColors.errorRed,
                   iconBg: const Color(0xFFFEE2E2),
                   cardBg: const Color(0xFFFFF5F5),
                   labelColor: AppColors.errorRed,
                   chevronColor: AppColors.errorRed,
+                  onTap: onEmergency,
                 ),
                 const SizedBox(height: 100),
               ]),
