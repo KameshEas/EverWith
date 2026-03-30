@@ -97,9 +97,13 @@ class FamilyService extends ChangeNotifier {
 
   /// Best-effort push of contacts to Firestore for caregiver view.
   void _syncToFirestore() {
+    if (FirestoreService.instance.unavailable) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    FirestoreService.instance.syncFamilyContacts(uid, _contacts).catchError((_) {});
+    FirestoreService.instance.syncFamilyContacts(uid, _contacts).catchError((e) {
+      debugPrint('[FamilyService] Firestore sync failed: $e');
+      FirestoreService.instance.setUnavailable();
+    });
   }
 
   Future<void> add(FamilyContact contact) async {

@@ -111,6 +111,7 @@ class CaregiverAlertService {
     required String message,
     String? medicineName,
   }) {
+    if (FirestoreService.instance.unavailable) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     FirestoreService.instance
@@ -124,7 +125,10 @@ class CaregiverAlertService {
             timestamp: DateTime.now(),
           ),
         )
-        .catchError((_) {});
+        .catchError((e) {
+      debugPrint('[CaregiverAlert] Firestore push failed: $e');
+      FirestoreService.instance.setUnavailable();
+    });
   }
 
   String get _todayKey {

@@ -22,6 +22,20 @@ class FirestoreService extends ChangeNotifier {
 
   final _db = FirebaseFirestore.instance;
 
+  /// Set to `true` after the first PERMISSION_DENIED / unavailable error.
+  /// Background sync methods check this to avoid spamming a disabled API.
+  bool _unavailable = false;
+
+  /// Whether background sync should be skipped (API not enabled yet).
+  bool get unavailable => _unavailable;
+
+  /// Mark the service as unavailable (called by sync callers on failure).
+  // ignore: use_setters_to_change_properties
+  void setUnavailable() => _unavailable = true;
+
+  /// Mark the service as available again (e.g. after the user enables the API).
+  void markAvailable() => _unavailable = false;
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  User Profiles
   // ═══════════════════════════════════════════════════════════════════════════

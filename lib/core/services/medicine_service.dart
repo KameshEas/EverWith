@@ -106,9 +106,13 @@ class MedicineService extends ChangeNotifier {
 
   /// Best-effort push of the full medicine list to Firestore.
   void _syncToFirestore() {
+    if (FirestoreService.instance.unavailable) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    FirestoreService.instance.syncMedicines(uid, _medicines).catchError((_) {});
+    FirestoreService.instance.syncMedicines(uid, _medicines).catchError((e) {
+      debugPrint('[MedicineService] Firestore sync failed: $e');
+      FirestoreService.instance.setUnavailable();
+    });
   }
 
   // ── Notifications ─────────────────────────────────────────────────────────

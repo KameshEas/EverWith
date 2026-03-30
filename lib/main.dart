@@ -123,11 +123,21 @@ class _AppEntryState extends State<_AppEntry> {
 
     Widget dest;
     if (currentUser != null) {
-      // Check Firestore for role
-      final role = await FirestoreService.instance.getUserRole(currentUser.uid);
+      // Check Firestore for role — fall back to elder on failure
+      UserRole? role;
+      try {
+        role = await FirestoreService.instance.getUserRole(currentUser.uid);
+      } catch (e) {
+        debugPrint('[Splash] Firestore role check failed: $e');
+      }
+
       if (role == UserRole.caregiver) {
-        final profile =
-            await FirestoreService.instance.getUserProfile(currentUser.uid);
+        UserProfile? profile;
+        try {
+          profile = await FirestoreService.instance.getUserProfile(currentUser.uid);
+        } catch (e) {
+          debugPrint('[Splash] Firestore profile fetch failed: $e');
+        }
         final elderUid = profile?.linkedElderUid;
         if (elderUid == null) {
           // Caregiver hasn't paired yet
