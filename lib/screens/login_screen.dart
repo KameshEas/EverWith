@@ -137,30 +137,36 @@ class _LoginScreenState extends State<LoginScreen> {
     switch (result) {
       case AuthSuccess(:final user):
         if (!mounted) return;
-        // Check if the user already has a Firestore profile
-        var profile =
-            await FirestoreService.instance.getUserProfile(user.uid);
+        // Try to check/create Firestore profile
+        UserProfile? profile;
+        try {
+          profile =
+              await FirestoreService.instance.getUserProfile(user.uid);
+          if (!mounted) return;
+
+          // New Google user — create Firestore profile
+          if (profile == null) {
+            final prefs = await SharedPreferences.getInstance();
+            final roleName = prefs.getString('user_role');
+            final role =
+                roleName == 'caregiver' ? UserRole.caregiver : UserRole.elder;
+            profile = UserProfile(
+              uid: user.uid,
+              name: user.displayName ?? '',
+              email: user.email,
+              role: role,
+              photoUrl: user.photoUrl,
+              createdAt: DateTime.now(),
+            );
+            await FirestoreService.instance.createUserProfile(profile);
+            if (!mounted) return;
+          }
+        } catch (e) {
+          debugPrint('[Login] Firestore Google profile sync failed: $e');
+        }
         if (!mounted) return;
 
-        // New Google user — create Firestore profile
-        if (profile == null) {
-          final prefs = await SharedPreferences.getInstance();
-          final roleName = prefs.getString('user_role');
-          final role =
-              roleName == 'caregiver' ? UserRole.caregiver : UserRole.elder;
-          profile = UserProfile(
-            uid: user.uid,
-            name: user.displayName ?? '',
-            email: user.email,
-            role: role,
-            photoUrl: user.photoUrl,
-            createdAt: DateTime.now(),
-          );
-          await FirestoreService.instance.createUserProfile(profile);
-          if (!mounted) return;
-        }
-
-        if (profile.role == UserRole.caregiver) {
+        if (profile != null && profile.role == UserRole.caregiver) {
           _navigateToCaregiverHome(
             user.uid,
             user.displayName ?? profile.name,
@@ -168,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           return;
         }
-        // Elder — regular flow
+        // Elder or fallback — regular flow
         final needsProfile =
             user.displayName == null || user.displayName!.trim().isEmpty;
         Navigator.of(context).pushReplacement(
@@ -190,13 +196,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _routeByRole(String uid, String? displayName) async {
-    final profile = await FirestoreService.instance.getUserProfile(uid);
-    if (!mounted) return;
-    if (profile != null && profile.role == UserRole.caregiver) {
-      _navigateToCaregiverHome(uid, displayName ?? profile.name, profile.linkedElderUid);
-    } else {
-      _navigateToHome();
+    try {
+      final profile = await FirestoreService.instance.getUserProfile(uid);
+      if (!mounted) return;
+      if (profile != null && profile.role == UserRole.caregiver) {
+        _navigateToCaregiverHome(uid, displayName ?? profile.name, profile.linkedElderUid);
+        return;
+      }
+    } catch (e) {
+      debugPrint('[Login] Firestore role check failed: $e');
     }
+    if (!mounted) return;
+    _navigateToHome();
   }
 
   void _navigateToCaregiverHome(

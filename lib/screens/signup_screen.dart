@@ -175,16 +175,20 @@ class _SignupScreenState extends State<SignupScreen> {
     final roleName = prefs.getString('user_role');
     final role = roleName == 'caregiver' ? UserRole.caregiver : UserRole.elder;
 
-    await FirestoreService.instance.createUserProfile(UserProfile(
-      uid: user.uid,
-      name: _nameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim().isNotEmpty
-          ? '$_countryCode${_phoneCtrl.text.trim()}'
-          : null,
-      role: role,
-      createdAt: DateTime.now(),
-    ));
+    try {
+      await FirestoreService.instance.createUserProfile(UserProfile(
+        uid: user.uid,
+        name: _nameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim().isNotEmpty
+            ? '$_countryCode${_phoneCtrl.text.trim()}'
+            : null,
+        role: role,
+        createdAt: DateTime.now(),
+      ));
+    } catch (e) {
+      debugPrint('[Signup] Firestore createUserProfile failed: $e');
+    }
 
     if (!mounted) return;
     if (role == UserRole.caregiver) {

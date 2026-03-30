@@ -103,7 +103,7 @@ class AlarmNotificationService {
 
   /// Builds alarm-style notification details.
   NotificationDetails _alarmDetails() {
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       _channelId,
       _channelName,
       channelDescription: _channelDesc,
@@ -125,9 +125,9 @@ class AlarmNotificationService {
       ticker: 'EverWith Alert',
     );
 
-    return const NotificationDetails(
+    return NotificationDetails(
       android: androidDetails,
-      iOS: DarwinNotificationDetails(
+      iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
