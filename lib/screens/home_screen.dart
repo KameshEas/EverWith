@@ -78,6 +78,12 @@ class _HomeScreenState extends State<HomeScreen>
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
 
+    // Initialize TTS with saved voice preference
+    _tts.setVoice(AccessibilitySettings.instance.ttsVoice);
+    _tts.init(
+      onComplete: () => setState(() {}),
+    );
+
     WidgetsBinding.instance.addObserver(this);
     _initSpeech();
     _subscribeToWakeWord();

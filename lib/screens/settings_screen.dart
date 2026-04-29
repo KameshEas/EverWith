@@ -10,6 +10,7 @@ import 'package:everwith/core/auth/auth_result.dart';
 import 'package:everwith/core/auth/auth_service.dart';
 import 'package:everwith/core/constants/app_spacing.dart';
 import 'package:everwith/core/services/firestore_service.dart';
+import 'package:everwith/core/services/tts_service.dart';
 import 'package:everwith/core/settings/accessibility_settings.dart';
 import 'package:everwith/core/theme/app_colors.dart';
 import 'package:everwith/core/theme/app_text_styles.dart';
@@ -391,6 +392,39 @@ class _AccessibilityTogglesState extends State<_AccessibilityToggles> {
           onChanged: _settings.setTts,
           title: const Text('Text-to-Speech'),
         ),
+        if (_settings.tts)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Voice',
+                  style: AppTextStyles.body.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButton<String>(
+                  value: _settings.ttsVoice,
+                  isExpanded: true,
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      _settings.setTtsVoice(newValue);
+                    }
+                  },
+                  items: piperVoices.map((voice) {
+                    return DropdownMenuItem(
+                      value: voice.id,
+                      child: Text(voice.name),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
