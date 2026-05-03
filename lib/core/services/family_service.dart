@@ -1,7 +1,10 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'firestore_service.dart';
 
 /// A saved family contact (subset of device contact data we need).
 class FamilyContact {
@@ -89,6 +92,18 @@ class FamilyService extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefKey, FamilyContact.listToJson(_contacts));
+    _syncToFirestore();
+  }
+
+  /// Best-effort push of contacts to Firestore for caregiver view.
+  void _syncToFirestore() {
+    if (FirestoreService.instance.unavailable) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    FirestoreService.instance.syncFamilyContacts(uid, _contacts).catchError((e) {
+      debugPrint('[FamilyService] Firestore sync failed: $e');
+      FirestoreService.instance.setUnavailable();
+    });
   }
 
   Future<void> add(FamilyContact contact) async {

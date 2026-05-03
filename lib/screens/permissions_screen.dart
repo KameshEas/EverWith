@@ -4,9 +4,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/app_spacing.dart';
+import '../core/services/wake_word_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
-import 'login_screen.dart';
+import 'role_selection_screen.dart';
 
 class PermissionsScreen extends StatefulWidget {
   const PermissionsScreen({super.key});
@@ -19,6 +20,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   // Permission statuses
   PermissionStatus _micStatus = PermissionStatus.denied;
   PermissionStatus _notifStatus = PermissionStatus.denied;
+  PermissionStatus _smsStatus = PermissionStatus.denied;
   bool _contactsGranted = false;
 
   bool get _canProceed => _micStatus.isGranted;
@@ -32,12 +34,14 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   Future<void> _checkAll() async {
     final mic = await Permission.microphone.status;
     final notif = await Permission.notification.status;
+    final sms = await Permission.sms.status;
     final contacts = await FlutterContacts.requestPermission(readonly: true)
         .catchError((_) => false);
     if (mounted) {
       setState(() {
         _micStatus = mic;
         _notifStatus = notif;
+        _smsStatus = sms;
         _contactsGranted = contacts;
       });
     }
@@ -60,6 +64,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         .catchError((_) => false);
     setState(() => _contactsGranted = granted);
     if (!granted && mounted) _showSettingsHint('Contacts');
+  }
+
+  Future<void> _requestSms() async {
+    final status = await Permission.sms.request();
+    setState(() => _smsStatus = status);
+    if (status.isPermanentlyDenied && mounted) _showSettingsHint('SMS');
   }
 
   void _showSettingsHint(String name) {
@@ -97,12 +107,14 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('seen_permissions', true);
+    // Start the wake word service now that microphone permission is granted
+    try { WakeWordService.instance.start(); } catch (_) {}
     if (!mounted) return;
     // ignore: use_build_context_synchronously
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
-        pageBuilder: (_, animation, __) => const LoginScreen(),
-        transitionsBuilder: (_, animation, __, child) =>
+        pageBuilder: (_, animation, __) => const RoleSelectionScreen(),
+        transitionsBuilder: (_, animation, __ , child) =>
             FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 400),
       ),
@@ -189,6 +201,20 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                 isMandatory: false,
                 isGranted: _contactsGranted,
                 onAllow: _requestContacts,
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // ── SMS (recommended — caregiver alerts) ──────────────────
+              _PermissionCard(
+                icon: Icons.sms_rounded,
+                iconColor: const Color(0xFFE11D48),
+                iconBg: const Color(0xFFFFF1F2),
+                title: 'SMS',
+                description:
+                    'Sends automatic alerts to your caregiver when you miss medicine or press SOS.',
+                isMandatory: false,
+                isGranted: _smsStatus.isGranted,
+                onAllow: _requestSms,
               ),
 
               const SizedBox(height: AppSpacing.xxl),

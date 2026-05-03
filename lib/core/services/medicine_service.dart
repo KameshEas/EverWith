@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/medicine.dart';
+import 'firestore_service.dart';
 
 /// Manages medicine CRUD (SharedPreferences) and daily reminder notifications.
 class MedicineService extends ChangeNotifier {
@@ -99,6 +101,18 @@ class MedicineService extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKey, Medicine.listToJson(_medicines));
+    _syncToFirestore();
+  }
+
+  /// Best-effort push of the full medicine list to Firestore.
+  void _syncToFirestore() {
+    if (FirestoreService.instance.unavailable) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    FirestoreService.instance.syncMedicines(uid, _medicines).catchError((e) {
+      debugPrint('[MedicineService] Firestore sync failed: $e');
+      FirestoreService.instance.setUnavailable();
+    });
   }
 
   // ── Notifications ─────────────────────────────────────────────────────────

@@ -3,19 +3,26 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/models/user_profile.dart';
 import 'core/services/family_service.dart';
+import 'core/services/firestore_service.dart';
 import 'core/services/medicine_service.dart';
+import 'core/services/medicine_monitor_service.dart';
 import 'core/services/wake_word_service.dart';
 import 'core/settings/notification_settings.dart';
 import 'core/settings/accessibility_settings.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
+import 'screens/caregiver/caregiver_home_screen.dart';
+import 'screens/caregiver/caregiver_pairing_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/permissions_screen.dart';
+import 'screens/role_selection_screen.dart';
 import 'screens/splash_screen.dart';
 
 /// Global navigator key — lets the auth gate redirect from outside widget tree.
@@ -32,6 +39,7 @@ void main() async {
   await NotificationSettings.instance.load();
   await MedicineService.instance.init();
   await FamilyService.instance.load();
+  MedicineMonitorService.instance.start();
   runApp(const EverWithApp());
 }
 
@@ -110,20 +118,54 @@ class _AppEntryState extends State<_AppEntry> {
     final prefs = await SharedPreferences.getInstance();
     final seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
     final seenPermissions = prefs.getBool('seen_permissions') ?? false;
+    final seenRoleSelection = prefs.getString('user_role') != null;
     final currentUser = FirebaseAuth.instance.currentUser;
 
     Widget dest;
     if (currentUser != null) {
-      bool autoListen = false;
-      try { autoListen = await WakeWordService.instance.getAutoListen(); } catch (_) {}
-      dest = HomeScreen(
-        userName: currentUser.displayName ?? 'Friend',
-        autoListen: autoListen,
-      );
-    } else if (seenOnboarding && seenPermissions) {
+      // Check Firestore for role — fall back to elder on failure
+      UserRole? role;
+      try {
+        role = await FirestoreService.instance.getUserRole(currentUser.uid);
+      } catch (e) {
+        debugPrint('[Splash] Firestore role check failed: $e');
+      }
+
+      if (role == UserRole.caregiver) {
+        UserProfile? profile;
+        try {
+          profile = await FirestoreService.instance.getUserProfile(currentUser.uid);
+        } catch (e) {
+          debugPrint('[Splash] Firestore profile fetch failed: $e');
+        }
+        final elderUid = profile?.linkedElderUid;
+        if (elderUid == null) {
+          // Caregiver hasn't paired yet
+          dest = CaregiverPairingScreen(
+            caregiverUid: currentUser.uid,
+            caregiverName: currentUser.displayName ?? 'Caregiver',
+          );
+        } else {
+          dest = CaregiverHomeScreen(
+            caregiverName: currentUser.displayName ?? 'Caregiver',
+            elderUid: elderUid,
+          );
+        }
+      } else {
+        // Elder or legacy user
+        bool autoListen = false;
+        try { autoListen = await WakeWordService.instance.getAutoListen(); } catch (_) {}
+        dest = HomeScreen(
+          userName: currentUser.displayName ?? 'Friend',
+          autoListen: autoListen,
+        );
+      }
+    } else if (seenOnboarding && seenPermissions && seenRoleSelection) {
       bool notLoggedIn = false;
       try { notLoggedIn = await WakeWordService.instance.getNotLoggedIn(); } catch (_) {}
       dest = LoginScreen(wakeWordNotLoggedIn: notLoggedIn);
+    } else if (seenOnboarding && seenPermissions && !seenRoleSelection) {
+      dest = const RoleSelectionScreen();
     } else if (seenOnboarding && !seenPermissions) {
       dest = const PermissionsScreen();
     } else {
@@ -223,8 +265,15 @@ class _WakeWordStarterState extends State<_WakeWordStarter> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WakeWordService.instance.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Only start the foreground microphone service if RECORD_AUDIO is granted.
+      // On Android 14+ (targetSdk 36) starting without the permission crashes.
+      final granted = await Permission.microphone.isGranted;
+      if (granted) {
+        WakeWordService.instance.start();
+      }
+      // If not granted yet the PermissionsScreen will grant it; HomeScreen
+      // calls start() again after permission is confirmed.
     });
   }
 

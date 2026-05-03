@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/auth/auth_result.dart';
 import '../core/auth/auth_service.dart';
 import '../core/constants/app_spacing.dart';
+import '../core/models/user_profile.dart';
+import '../core/services/firestore_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../widgets/app_logo.dart';
@@ -14,6 +17,7 @@ import '../widgets/google_sign_in_button.dart';
 import 'home_screen.dart';
 import 'permissions_screen.dart';
 import 'profile_setup_screen.dart';
+import 'caregiver/caregiver_pairing_screen.dart';
 
 /// Signup screen for EverWith.
 ///
@@ -159,10 +163,46 @@ class _SignupScreenState extends State<SignupScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     switch (result) {
-      case AuthSuccess():
-        _navigateToHome();
+      case AuthSuccess(:final user):
+        await _createProfile(user);
       case AuthFailure(:final message):
         _showError(message);
+    }
+  }
+
+  Future<void> _createProfile(AuthUser user) async {
+    final prefs = await SharedPreferences.getInstance();
+    final roleName = prefs.getString('user_role');
+    final role = roleName == 'caregiver' ? UserRole.caregiver : UserRole.elder;
+
+    try {
+      await FirestoreService.instance.createUserProfile(UserProfile(
+        uid: user.uid,
+        name: _nameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim().isNotEmpty
+            ? '$_countryCode${_phoneCtrl.text.trim()}'
+            : null,
+        role: role,
+        createdAt: DateTime.now(),
+      ));
+    } catch (e) {
+      debugPrint('[Signup] Firestore createUserProfile failed: $e');
+    }
+
+    if (!mounted) return;
+    if (role == UserRole.caregiver) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => CaregiverPairingScreen(
+            caregiverUid: user.uid,
+            caregiverName: user.displayName ?? _nameCtrl.text.trim(),
+          ),
+        ),
+        (_) => false,
+      );
+    } else {
+      _navigateToHome();
     }
   }
 
@@ -203,7 +243,37 @@ class _SignupScreenState extends State<SignupScreen> {
     switch (result) {
       case AuthSuccess(:final user):
         if (!mounted) return;
-        // If the user already has a display name, skip profile setup
+        // Create Firestore profile for new Google users
+        final existingProfile =
+            await FirestoreService.instance.getUserProfile(user.uid);
+        if (existingProfile == null) {
+          final prefs = await SharedPreferences.getInstance();
+          final roleName = prefs.getString('user_role');
+          final role =
+              roleName == 'caregiver' ? UserRole.caregiver : UserRole.elder;
+          await FirestoreService.instance.createUserProfile(UserProfile(
+            uid: user.uid,
+            name: user.displayName ?? '',
+            email: user.email,
+            role: role,
+            photoUrl: user.photoUrl,
+            createdAt: DateTime.now(),
+          ));
+          if (!mounted) return;
+          if (role == UserRole.caregiver) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => CaregiverPairingScreen(
+                  caregiverUid: user.uid,
+                  caregiverName: user.displayName ?? 'Caregiver',
+                ),
+              ),
+              (_) => false,
+            );
+            return;
+          }
+        }
+        // Existing user or elder — check if profile setup needed
         final needsProfile =
             user.displayName == null || user.displayName!.trim().isEmpty;
         Navigator.of(context).pushReplacement(
