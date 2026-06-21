@@ -38,6 +38,10 @@ class CaregiverAlertService {
     final caregiver = FamilyService.instance.caregiver;
     if (caregiver == null) return false;
 
+    // Check caregiver's notification preference
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('cg_notify_missed') ?? true)) return false;
+
     // Rate-limit: one alert per medicine per day
     final alertKey = 'medicine_$medicineName';
     if (await _alreadySentToday(alertKey)) return false;
@@ -78,6 +82,10 @@ class CaregiverAlertService {
     final caregiver = FamilyService.instance.caregiver;
     if (caregiver == null) return false;
 
+    // Check caregiver's notification preference
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('cg_notify_emergency') ?? true)) return false;
+
     if (await _dailyLimitReached()) return false;
 
     final message = '[EverWith EMERGENCY] $userName pressed the SOS button '
@@ -98,6 +106,47 @@ class CaregiverAlertService {
       // Fire a loud alarm notification on the parent's device
       await AlarmNotificationService.instance.showEmergencyAlarm(
         caregiverName: caregiver.name,
+      );
+    }
+    return sent;
+  }
+
+  /// Send a daily summary SMS to the caregiver.
+  ///
+  /// [elderName] — the elderly user's display name.
+  /// [taken] — number of medicines taken today.
+  /// [total] — total number of non-asNeeded medicines today.
+  Future<bool> sendDailySummary({
+    required String elderName,
+    required int taken,
+    required int total,
+  }) async {
+    final caregiver = FamilyService.instance.caregiver;
+    if (caregiver == null) return false;
+
+    // Check caregiver's notification preference
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('cg_notify_daily') ?? false)) return false;
+
+    // Rate-limit: only once per day
+    final alertKey = 'daily_summary';
+    if (await _alreadySentToday(alertKey)) return false;
+    if (await _dailyLimitReached()) return false;
+
+    final message =
+        '[EverWith Daily Update] $elderName took $taken of $total medicines today.';
+
+    final sent = await SmsService.instance.sendSms(
+      phoneNumber: caregiver.phone,
+      message: message,
+    );
+
+    if (sent) {
+      await _recordAlert(alertKey);
+      // Push to Firestore for caregiver dashboard
+      _pushAlertToFirestore(
+        type: AlertEntryType.missedMedicine,
+        message: message,
       );
     }
     return sent;

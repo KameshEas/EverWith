@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'caregiver_alert_service.dart';
 import 'family_service.dart';
@@ -54,6 +55,7 @@ class MedicineMonitorService {
     final now = DateTime.now();
     final today = _todayKey(now);
 
+    // Check for missed medicines
     for (final medicine in MedicineService.instance.medicines) {
       // Skip as-needed medicines.
       if (medicine.frequency == MedicineFrequency.onlyAsNeeded) continue;
@@ -74,6 +76,33 @@ class MedicineMonitorService {
           scheduledTime: medicine.timeLabel,
           userName: userName,
         );
+      }
+    }
+
+    // Send daily summary at 8 PM if enabled
+    if (now.hour >= 20) {
+      final prefs = await SharedPreferences.getInstance();
+      final lastSummaryDate = prefs.getString('daily_summary_date');
+      if (lastSummaryDate != today) {
+        // Count medicines: total non-asNeeded, how many taken
+        final medicines = MedicineService.instance.medicines;
+        final regularMedicines = medicines
+            .where((m) => m.frequency != MedicineFrequency.onlyAsNeeded)
+            .toList();
+        final totalRegular = regularMedicines.length;
+        final takenRegular = regularMedicines
+            .where((m) => m.takenDates.contains(today))
+            .length;
+
+        final sent = await CaregiverAlertService.instance.sendDailySummary(
+          elderName: userName,
+          taken: takenRegular,
+          total: totalRegular,
+        );
+
+        if (sent) {
+          await prefs.setString('daily_summary_date', today);
+        }
       }
     }
   }

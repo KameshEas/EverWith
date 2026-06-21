@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../core/constants/app_spacing.dart';
 import '../core/theme/app_colors.dart';
@@ -55,16 +56,60 @@ class AuthTextField extends StatefulWidget {
 class _AuthTextFieldState extends State<AuthTextField> {
   bool _obscure = true;
   bool _isFocused = false;
+  bool _isListening = false;
+  bool _speechAvailable = false;
   late final FocusNode _focusNode;
+  late final stt.SpeechToText _speech;
 
   @override
   void initState() {
     super.initState();
     _focusNode = widget.focusNode ?? FocusNode();
     _focusNode.addListener(_onFocusChange);
+    _speech = stt.SpeechToText();
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    _speechAvailable = await _speech.initialize(
+      onError: (_) {},
+      onStatus: (status) {
+        if (status == stt.SpeechToText.notListeningStatus && mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+    if (mounted) setState(() {});
   }
 
   void _onFocusChange() => setState(() => _isFocused = _focusNode.hasFocus);
+
+  Future<void> _onMicTap() async {
+    if (!_speechAvailable) return;
+
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+
+    if (mounted) setState(() => _isListening = true);
+
+    await _speech.listen(
+      onResult: (result) {
+        if (result.recognizedWords.isNotEmpty) {
+          widget.controller.text = result.recognizedWords;
+          widget.controller.selection = TextSelection.fromPosition(
+            TextPosition(offset: result.recognizedWords.length),
+          );
+          if (widget.onChanged != null) {
+            widget.onChanged!(result.recognizedWords);
+          }
+        }
+      },
+      listenFor: const Duration(seconds: 10),
+    );
+  }
 
   @override
   void dispose() {
@@ -179,16 +224,16 @@ class _AuthTextFieldState extends State<AuthTextField> {
                   label: 'Use voice input for ${widget.label}',
                   button: true,
                   child: GestureDetector(
-                    onTap: () {
-                      // TODO: wire to speech recognition
-                    },
+                    onTap: _onMicTap,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm + 2,
                       ),
                       child: Icon(
                         Icons.mic_rounded,
-                        color: AppColors.primaryBlue,
+                        color: _isListening
+                            ? const Color(0xFF059669)
+                            : AppColors.primaryBlue,
                         size: 22,
                       ),
                     ),

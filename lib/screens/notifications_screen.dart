@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/constants/app_spacing.dart';
+import '../core/services/alarm_notification_service.dart';
 import '../core/settings/notification_settings.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
@@ -14,6 +16,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final _ns = NotificationSettings.instance;
+  final _alarmService = AlarmNotificationService.instance;
 
   @override
   void initState() {
@@ -28,6 +31,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _onChanged() => setState(() {});
+
+  Future<void> _setDailyActivity(bool v) async {
+    await _ns.setDailyActivity(v);
+    if (v) {
+      await _alarmService.scheduleDailyActivityReminder();
+    } else {
+      await _alarmService.cancelDailyActivityReminder();
+    }
+  }
+
+  Future<void> _setFamilyCalls(bool v) async {
+    await _ns.setFamilyCalls(v);
+    if (v) {
+      await _alarmService.scheduleWeeklyFamilyCallsReminder();
+    } else {
+      await _alarmService.cancelFamilyCallsReminder();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +125,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     subtitle:
                         'Alerts when your\nfamily members\ntry to reach you.',
                     value: _ns.familyCalls,
-                    onChanged: _ns.setFamilyCalls,
+                    onChanged: _setFamilyCalls,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _NotifCard(
@@ -115,7 +136,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     subtitle:
                         'Gentle nudges to\nstay active and\nreach your goals.',
                     value: _ns.dailyActivity,
-                    onChanged: _ns.setDailyActivity,
+                    onChanged: _setDailyActivity,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _NotifCard(
@@ -247,10 +268,7 @@ class _AdvancedSettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        // TODO: navigate to system notification settings
-        // openAppSettings() via app_settings package if needed
-      },
+      onTap: () async => openAppSettings(),
       child: Container(
         height: 58,
         decoration: BoxDecoration(
