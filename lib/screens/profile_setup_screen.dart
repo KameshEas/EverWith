@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/constants/app_spacing.dart';
+import '../core/models/user_profile.dart';
+import '../core/services/firestore_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../widgets/app_logo.dart';
@@ -83,10 +85,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     if (!_validate()) return;
 
     final name = _nameCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    // Persist displayName to Firebase Auth so re-login skips this screen
+    // Persist displayName to Firebase Auth
     try {
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+      await user.updateDisplayName(name);
+    } catch (_) {
+      // Non-critical — proceed anyway
+    }
+
+    // Save profile to Firestore with phone number
+    try {
+      final profile = UserProfile(
+        uid: user.uid,
+        name: name,
+        email: user.email,
+        phone: phone,
+        role: UserRole.elder,
+        photoUrl: user.photoURL,
+      );
+      await FirestoreService.instance.createUserProfile(profile);
     } catch (_) {
       // Non-critical — proceed anyway
     }

@@ -13,12 +13,14 @@ import '../core/constants/app_languages.dart';
 import '../core/constants/app_spacing.dart';
 import '../core/services/caregiver_alert_service.dart';
 import '../core/services/family_service.dart';
+import '../core/services/voice_command_service.dart';
 import '../core/services/wake_word_service.dart';
 import '../core/settings/accessibility_settings.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import 'family_screen.dart';
 import 'medicines_screen.dart';
+import 'music_screen.dart';
 import 'settings_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,21 +171,60 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) setState(() {});
   }
 
+  /// Maps short language codes to STT locale IDs.
+  String _getLocaleId(String langCode) {
+    const localeMap = {
+      'en': 'en_US',
+      'es': 'es_ES',
+      'fr': 'fr_FR',
+      'de': 'de_DE',
+      'hi': 'hi_IN',
+      'ta': 'ta_IN',
+      'pt': 'pt_PT',
+      'ja': 'ja_JP',
+      'ko': 'ko_KR',
+    };
+    return localeMap[langCode] ?? 'en_US';
+  }
+
   /// Restarts a single STT cycle during continuous listening.
   Future<void> _restartListenCycle() async {
     if (!mounted || !_autoRelistening) return;
+    final localeId = _getLocaleId(AccessibilitySettings.instance.languageCode);
     await _speech.listen(
-      onResult: (result) {
+      onResult: (result) async {
         if (!mounted) return;
         if (result.recognizedWords.isNotEmpty) {
           _lastWordTime = DateTime.now();
           setState(() => _recognizedText = result.recognizedWords);
+
+          // Dispatch voice command
+          final commandResult = await VoiceCommandService.dispatch(
+            context,
+            result.recognizedWords,
+          );
+
+          if (!mounted) return;
+
+          // Handle navigation based on command result
+          switch (commandResult) {
+            case VoiceCommandResult.navigateToMedicines:
+              _onNavTap(1);
+            case VoiceCommandResult.navigateToSettings:
+              _onNavTap(4);
+            case VoiceCommandResult.navigateToHome:
+              _onNavTap(0);
+            case VoiceCommandResult.handled:
+            case VoiceCommandResult.notRecognized:
+              // No navigation needed
+              break;
+          }
         }
       },
       listenFor: const Duration(seconds: 30),
       pauseFor: _silenceGap,
-      localeId: 'en_US',
-      cancelOnError: false,
+      localeId: localeId,
+      listenOptions: stt.SpeechListenOptions(cancelOnError: false),
     );
   }
 
@@ -717,6 +758,9 @@ class _HomeBody extends StatelessWidget {
                   subtitle: 'Play your favorite tunes',
                   iconColor: const Color(0xFF60A5FA),
                   iconBg: const Color(0xFFEFF6FF),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MusicScreen()),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _ActionCard(
