@@ -9,7 +9,8 @@ class HelpScreen extends StatelessWidget {
   const HelpScreen({super.key});
 
   // ── Contact details ────────────────────────────────────────────────────
-  static const String _supportPhone = 'tel:+18005551234';
+  // TODO: Configure with actual support phone number
+  static const String _supportPhone = 'tel:+1-800-555-0199';
   static const String _supportEmail = 'mailto:support@everwith.app';
 
   // ── FAQ content ────────────────────────────────────────────────────────

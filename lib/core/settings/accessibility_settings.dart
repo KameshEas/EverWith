@@ -1,5 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/firestore_service.dart';
 
 class AccessibilitySettings extends ChangeNotifier {
   AccessibilitySettings._();
@@ -38,6 +41,7 @@ class AccessibilitySettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyLargeFont, value);
+    await _syncToFirestore();
   }
 
   Future<void> setHighContrast(bool value) async {
@@ -45,6 +49,7 @@ class AccessibilitySettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyHighContrast, value);
+    await _syncToFirestore();
   }
 
   Future<void> setTts(bool value) async {
@@ -52,6 +57,7 @@ class AccessibilitySettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyTts, value);
+    await _syncToFirestore();
   }
 
   Future<void> setTtsVoice(String voiceId) async {
@@ -59,6 +65,7 @@ class AccessibilitySettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyTtsVoice, voiceId);
+    await _syncToFirestore();
   }
 
   Future<void> setLanguage(String code) async {
@@ -66,5 +73,27 @@ class AccessibilitySettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyLanguage, code);
+    await _syncToFirestore();
+  }
+
+  /// Best-effort sync of all accessibility settings to Firestore.
+  /// Silent fail — local settings always work as fallback.
+  Future<void> _syncToFirestore() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      await FirestoreService.instance.updateUserProfile(uid, {
+        'accessibilitySettings': {
+          'largeFont': _largeFont,
+          'highContrast': _highContrast,
+          'tts': _tts,
+          'ttsVoice': _ttsVoice,
+          'languageCode': _languageCode,
+        }
+      });
+    } catch (_) {
+      // Silent fail — local-only settings work fine
+    }
   }
 }

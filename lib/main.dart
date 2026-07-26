@@ -154,7 +154,11 @@ class _AppEntryState extends State<_AppEntry> {
       } else {
         // Elder or legacy user
         bool autoListen = false;
-        try { autoListen = await WakeWordService.instance.getAutoListen(); } catch (_) {}
+        try {
+          autoListen = await WakeWordService.instance.getAutoListen();
+        } catch (e) {
+          debugPrint('[Splash] Error getting auto-listen state: $e');
+        }
         dest = HomeScreen(
           userName: currentUser.displayName ?? 'Friend',
           autoListen: autoListen,
@@ -162,7 +166,11 @@ class _AppEntryState extends State<_AppEntry> {
       }
     } else if (seenOnboarding && seenPermissions && seenRoleSelection) {
       bool notLoggedIn = false;
-      try { notLoggedIn = await WakeWordService.instance.getNotLoggedIn(); } catch (_) {}
+      try {
+        notLoggedIn = await WakeWordService.instance.getNotLoggedIn();
+      } catch (e) {
+        debugPrint('[Splash] Error getting not-logged-in state: $e');
+      }
       dest = LoginScreen(wakeWordNotLoggedIn: notLoggedIn);
     } else if (seenOnboarding && seenPermissions && !seenRoleSelection) {
       dest = const RoleSelectionScreen();

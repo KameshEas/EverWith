@@ -1,4 +1,4 @@
-package com.aspiredesignovation.everwith
+package com.example.everwith
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -45,6 +45,7 @@ class WakeWordService : Service() {
         const val ALERT_CHANNEL_ID = "everwith_wake_alert"
         const val NOTIFICATION_ID = 2001
         const val ALERT_NOTIFICATION_ID = 2002
+        const val ERROR_NETWORK_CONNECTIVITY = 11  // Undocumented error code observed on network disconnect
 
         /** Event sink injected by MainActivity via the EventChannel stream handler. */
         @Volatile
@@ -76,10 +77,11 @@ class WakeWordService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var audioManager: AudioManager? = null
     private var tts: TextToSpeech? = null
-    private var active = false
-    private var paused = false
-    private var recognizerBusy = false
-    private var lastFireTimeMs = 0L
+    @Volatile private var active = false
+    @Volatile private var paused = false
+    @Volatile private var recognizerBusy = false
+    @Volatile private var volumeMuted = false
+    @Volatile private var lastFireTimeMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -147,6 +149,7 @@ class WakeWordService : Service() {
 
         try {
             // TRY 1: Force on-device recognizer (API 33+) with try-catch for better error handling
+            volumeMuted = false
             speechRecognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 try {
                     Log.d(TAG, "Attempting on-device recognizer (API 33+)...")
@@ -156,16 +159,18 @@ class WakeWordService : Service() {
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "On-device recognizer failed: ${e.message} – falling back to network")
-                    // Fallback to network recognizer
+                    // Fallback to network recognizer (needs mute/restore)
                     muteBeep()
+                    volumeMuted = true
                     SpeechRecognizer.createSpeechRecognizer(this).also { sr ->
                         sr.setRecognitionListener(listener)
                         Log.i(TAG, "Fallback: Using network recognizer")
                     }
                 }
             } else {
-                // API < 33: Use network recognizer
+                // API < 33: Use network recognizer (needs mute/restore)
                 muteBeep()
+                volumeMuted = true
                 SpeechRecognizer.createSpeechRecognizer(this).also { sr ->
                     sr.setRecognitionListener(listener)
                     Log.i(TAG, "Using network recognizer (API < 33)")
@@ -187,8 +192,10 @@ class WakeWordService : Service() {
 
             speechRecognizer?.startListening(intent)
             recognizerBusy = true
-            // Restore media volume after recognizer has started
-            mainHandler.postDelayed({ restoreVolume() }, 800L)
+            // Restore media volume after recognizer has started (only if we muted for network)
+            if (volumeMuted) {
+                mainHandler.postDelayed({ if (volumeMuted) restoreVolume() }, 800L)
+            }
             Log.d(TAG, "📍 Listening for wake word…")
             
         } catch (e: Exception) {
@@ -235,8 +242,11 @@ class WakeWordService : Service() {
 
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            // Recognizer is live — restore volume (beep window has passed)
-            restoreVolume()
+            // Recognizer is live — restore volume only if we actually muted
+            if (volumeMuted) {
+                restoreVolume()
+                volumeMuted = false
+            }
         }
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
@@ -245,27 +255,24 @@ class WakeWordService : Service() {
         override fun onEvent(eventType: Int, params: Bundle?) {}
 
         override fun onPartialResults(partialResults: Bundle?) {
-            val candidates = partialResults
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?: return
-            // On a partial match: immediately stop and restart so there's no wait
-            if (checkForWakeWord(candidates)) {
-                speechRecognizer?.stopListening()
-                scheduleRestart(200L)
-            }
+            // Ignore partials — only check final results to avoid debounce race conditions
         }
 
         override fun onResults(results: Bundle?) {
             val candidates = results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?: emptyList()
+            // Only check wake word on final results, not partials
             checkForWakeWord(candidates)
             scheduleRestart(300L)
         }
 
         override fun onError(error: Int) {
             // Restore volume immediately if suppressed (in case onReadyForSpeech never fired)
-            restoreVolume()
+            if (volumeMuted) {
+                restoreVolume()
+                volumeMuted = false
+            }
             val errorName = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH               -> "ERROR_NO_MATCH"
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT         -> "ERROR_SPEECH_TIMEOUT"
@@ -276,7 +283,7 @@ class WakeWordService : Service() {
                 SpeechRecognizer.ERROR_CLIENT                 -> "ERROR_CLIENT"
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS"
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY        -> "ERROR_RECOGNIZER_BUSY"   // = 8
-                11 /* ERROR_SERVER_DISCONNECTED */            -> "ERROR_SERVER_DISCONNECTED"
+                ERROR_NETWORK_CONNECTIVITY                    -> "ERROR_NETWORK_CONNECTIVITY"
                 else                                          -> "ERROR_$error"
             }
             val delayMs = when (error) {
@@ -286,13 +293,13 @@ class WakeWordService : Service() {
                 SpeechRecognizer.ERROR_NETWORK,
                 SpeechRecognizer.ERROR_NETWORK_TIMEOUT        -> 5_000L  // wait for connectivity
                 SpeechRecognizer.ERROR_SERVER                 -> 5_000L
-                11 /* ERROR_SERVER_DISCONNECTED */            -> 4_000L  // server closed — longer pause + full reset
+                ERROR_NETWORK_CONNECTIVITY                    -> 4_000L  // network disconnect — longer pause + full reset
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY        -> 2_000L  // = 8, busy — wait longer
                 else                                          -> 1_000L
             }
             Log.d(TAG, "Recognition $errorName ($error) – restarting in ${delayMs}ms")
             // IMPROVED: On server disconnect, fully tear down and recreate recognizer
-            if (error == 11 || error == SpeechRecognizer.ERROR_SERVER ||
+            if (error == ERROR_NETWORK_CONNECTIVITY || error == SpeechRecognizer.ERROR_SERVER ||
                 error == SpeechRecognizer.ERROR_CLIENT ||
                 error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                 error == SpeechRecognizer.ERROR_NETWORK) {

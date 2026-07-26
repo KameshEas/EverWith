@@ -660,7 +660,9 @@ class _Avatar extends StatelessWidget {
     if (contact.avatarBase64 != null && contact.avatarBase64!.isNotEmpty) {
       try {
         bytes = base64Decode(contact.avatarBase64!);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[FamilyScreen] Error decoding avatar base64: $e');
+      }
     }
 
     Widget avatar;

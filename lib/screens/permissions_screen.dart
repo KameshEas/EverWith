@@ -108,7 +108,11 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('seen_permissions', true);
     // Start the wake word service now that microphone permission is granted
-    try { WakeWordService.instance.start(); } catch (_) {}
+    try {
+      WakeWordService.instance.start();
+    } catch (e) {
+      debugPrint('[PermissionsScreen] Error starting wake word service: $e');
+    }
     if (!mounted) return;
     // ignore: use_build_context_synchronously
     Navigator.of(context).pushReplacement(

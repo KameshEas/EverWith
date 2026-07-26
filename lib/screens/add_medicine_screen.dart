@@ -41,7 +41,17 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
   }
 
   Future<void> _initSpeech() async {
-    _speechAvailable = await _speech.initialize();
+    try {
+      _speechAvailable = await _speech.initialize(
+        onError: (e) => debugPrint('[AddMedicineScreen] STT error: ${e.errorMsg}'),
+        onStatus: (status) {},
+      );
+      if (!_speechAvailable) {
+        debugPrint('[AddMedicineScreen] STT initialization failed');
+      }
+    } catch (e) {
+      debugPrint('[AddMedicineScreen] Error initializing STT: $e');
+    }
     if (mounted) setState(() {});
   }
 

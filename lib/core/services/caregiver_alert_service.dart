@@ -174,6 +174,10 @@ class CaregiverAlertService {
             timestamp: DateTime.now(),
           ),
         )
+        .then((_) {
+      // Mark Firestore as available again on successful push
+      FirestoreService.instance.markAvailable();
+    })
         .catchError((e) {
       debugPrint('[CaregiverAlert] Firestore push failed: $e');
       FirestoreService.instance.setUnavailable();

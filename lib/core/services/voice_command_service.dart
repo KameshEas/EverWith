@@ -123,8 +123,12 @@ class VoiceCommandService {
       final uri = Uri(scheme: 'tel', path: contact.phone);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
+      } else {
+        debugPrint('[VoiceCommandService] Cannot launch phone app');
+        await _tts.speak('Could not open the phone app.');
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[VoiceCommandService] Error calling contact: $e');
       await _tts.speak('Could not open the phone app.');
     }
 
@@ -139,9 +143,18 @@ class VoiceCommandService {
       return;
     }
 
-    await _tts.speak('Sending emergency alert to ${caregiver.name}.');
-    await CaregiverAlertService.instance.alertEmergency(
-      userName: 'Your loved one',
-    );
+    try {
+      await _tts.speak('Sending emergency alert to ${caregiver.name}.');
+      final sent = await CaregiverAlertService.instance.alertEmergency(
+        userName: 'Your loved one',
+      );
+      if (!sent) {
+        debugPrint('[VoiceCommandService] Emergency alert failed to send');
+        await _tts.speak('Emergency alert could not be sent.');
+      }
+    } catch (e) {
+      debugPrint('[VoiceCommandService] Error handling emergency: $e');
+      await _tts.speak('Error sending emergency alert.');
+    }
   }
 }

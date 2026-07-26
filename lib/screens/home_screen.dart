@@ -61,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen>
   static const _silenceGap = Duration(seconds: 6);
   DateTime? _lastWordTime;
   bool _autoRelistening = false;
+  bool _listenCycleInProgress = false;
 
   // ── Profile photo (local cache) ─────────────────────────────────────────
   File? _profilePhoto;
@@ -91,16 +92,17 @@ class _HomeScreenState extends State<HomeScreen>
     _subscribeToWakeWord();
     _loadProfilePhoto();
 
-    if (widget.autoListen) {
-      Future.delayed(const Duration(milliseconds: 800), _activateMic);
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         final autoListen = await WakeWordService.instance.getAutoListen();
         if (autoListen && mounted) {
-          Future.delayed(const Duration(milliseconds: 900), _activateMic);
+          Future.delayed(const Duration(milliseconds: 900), () {
+            if (mounted) _activateMic();
+          });
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[HomeScreen] Error getting auto-listen state: $e');
+      }
     });
   }
 
@@ -139,7 +141,9 @@ class _HomeScreenState extends State<HomeScreen>
       if (await file.exists() && mounted) {
         setState(() => _profilePhoto = file);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[HomeScreen] Error loading profile photo: $e');
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -151,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen>
           if (_autoRelistening) {
             // Mid-speech restart — check if real silence has elapsed
             final sinceLastWord = _lastWordTime == null
-                ? _silenceGap
+                ? Duration.zero
                 : DateTime.now().difference(_lastWordTime!);
             if (sinceLastWord < _silenceGap) {
               // User is still speaking (just an Android recognizer timeout)
@@ -162,9 +166,14 @@ class _HomeScreenState extends State<HomeScreen>
           }
           // Real silence — finalise
           _autoRelistening = false;
+          _listenCycleInProgress = false;
           _lastWordTime = null;
           setState(() => _isListening = false);
-          try { WakeWordService.instance.resume(); } catch (_) {}
+          try {
+            WakeWordService.instance.resume();
+          } catch (e) {
+            debugPrint('[HomeScreen] Error resuming wake word service: $e');
+          }
         }
       },
     );
@@ -189,43 +198,48 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// Restarts a single STT cycle during continuous listening.
   Future<void> _restartListenCycle() async {
-    if (!mounted || !_autoRelistening) return;
-    final localeId = _getLocaleId(AccessibilitySettings.instance.languageCode);
-    await _speech.listen(
-      onResult: (result) async {
-        if (!mounted) return;
-        if (result.recognizedWords.isNotEmpty) {
-          _lastWordTime = DateTime.now();
-          setState(() => _recognizedText = result.recognizedWords);
-
-          // Dispatch voice command
-          final commandResult = await VoiceCommandService.dispatch(
-            context,
-            result.recognizedWords,
-          );
-
+    if (!mounted || !_autoRelistening || _listenCycleInProgress) return;
+    _listenCycleInProgress = true;
+    try {
+      final localeId = _getLocaleId(AccessibilitySettings.instance.languageCode);
+      await _speech.listen(
+        onResult: (result) async {
           if (!mounted) return;
+          if (result.recognizedWords.isNotEmpty) {
+            _lastWordTime = DateTime.now();
+            setState(() => _recognizedText = result.recognizedWords);
 
-          // Handle navigation based on command result
-          switch (commandResult) {
-            case VoiceCommandResult.navigateToMedicines:
-              _onNavTap(1);
-            case VoiceCommandResult.navigateToSettings:
-              _onNavTap(4);
-            case VoiceCommandResult.navigateToHome:
-              _onNavTap(0);
-            case VoiceCommandResult.handled:
-            case VoiceCommandResult.notRecognized:
-              // No navigation needed
-              break;
+            // Dispatch voice command
+            final commandResult = await VoiceCommandService.dispatch(
+              context,
+              result.recognizedWords,
+            );
+
+            if (!mounted) return;
+
+            // Handle navigation based on command result
+            switch (commandResult) {
+              case VoiceCommandResult.navigateToMedicines:
+                _onNavTap(1);
+              case VoiceCommandResult.navigateToSettings:
+                _onNavTap(4);
+              case VoiceCommandResult.navigateToHome:
+                _onNavTap(0);
+              case VoiceCommandResult.handled:
+              case VoiceCommandResult.notRecognized:
+                // No navigation needed
+                break;
+            }
           }
-        }
-      },
-      listenFor: const Duration(seconds: 30),
-      pauseFor: _silenceGap,
-      localeId: localeId,
-      listenOptions: stt.SpeechListenOptions(cancelOnError: false),
-    );
+        },
+        listenFor: const Duration(seconds: 30),
+        pauseFor: _silenceGap,
+        localeId: localeId,
+        listenOptions: stt.SpeechListenOptions(cancelOnError: false),
+      );
+    } finally {
+      _listenCycleInProgress = false;
+    }
   }
 
   Future<void> _subscribeToWakeWord() async {
@@ -256,7 +270,11 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _activateMic() async {
     if (!_speechAvailable || _isListening || _isSpeaking) return;
     // Release the mic from wake-word detection first
-    try { await WakeWordService.instance.pause(); } catch (_) {}
+    try {
+      await WakeWordService.instance.pause();
+    } catch (e) {
+      debugPrint('[HomeScreen] Error pausing wake word service: $e');
+    }
     await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     _lastWordTime = null;
@@ -288,7 +306,11 @@ class _HomeScreenState extends State<HomeScreen>
         _speech.cancel();
         setState(() => _isListening = false);
       }
-      try { WakeWordService.instance.resume(); } catch (_) {}
+      try {
+        WakeWordService.instance.resume();
+      } catch (e) {
+        debugPrint('[HomeScreen] Error resuming wake word in lifecycle: $e');
+      }
     }
   }
 
@@ -300,7 +322,11 @@ class _HomeScreenState extends State<HomeScreen>
     _speech.cancel();
     _tts.stop();
     _tts.dispose();
-    try { WakeWordService.instance.resume(); } catch (_) {}
+    try {
+      WakeWordService.instance.resume();
+    } catch (e) {
+      debugPrint('[HomeScreen] Error resuming wake word in dispose: $e');
+    }
     super.dispose();
   }
 
@@ -325,10 +351,18 @@ class _HomeScreenState extends State<HomeScreen>
       await _speech.stop();
       setState(() => _isListening = false);
       // Give back the mic to wake-word detection
-      try { await WakeWordService.instance.resume(); } catch (_) {}
+      try {
+        await WakeWordService.instance.resume();
+      } catch (e) {
+        debugPrint('[HomeScreen] Error resuming wake word in toggleListening: $e');
+      }
     } else {
       // Release the mic from wake-word detection first
-      try { await WakeWordService.instance.pause(); } catch (_) {}
+      try {
+        await WakeWordService.instance.pause();
+      } catch (e) {
+        debugPrint('[HomeScreen] Error pausing wake word in toggleListening: $e');
+      }
       await Future.delayed(const Duration(milliseconds: 300));
       _lastWordTime = null;
       _autoRelistening = true;
@@ -358,7 +392,11 @@ class _HomeScreenState extends State<HomeScreen>
     _lastWordTime = null;
     setState(() => _isListening = false);
     // Resume wake-word detection after any error
-    try { WakeWordService.instance.resume(); } catch (_) {}
+    try {
+      WakeWordService.instance.resume();
+    } catch (e) {
+      debugPrint('[HomeScreen] Error resuming wake word after error: $e');
+    }
   }
 
   // ===== Emergency SOS =======================================================

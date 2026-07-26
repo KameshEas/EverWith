@@ -1,4 +1,4 @@
-package com.aspiredesignovation.everwith
+package com.example.everwith
 
 import android.Manifest
 import android.content.Intent
@@ -141,24 +141,38 @@ class MainActivity : FlutterActivity() {
         // Guard: only deliver if this is genuinely a wake-word cold-start launch,
         // not a return from the overlay-permission settings screen.
         if (!i.getBooleanExtra("from_wake_word", false)) return
-        if (!i.getBooleanExtra("auto_listen", false)) return
         // Ensure Flutter engine is attached before touching the event sink
         if (flutterEngine == null) return
+        scheduleWakeWordEvent(i, retryCount = 0)
+    }
+
+    private fun scheduleWakeWordEvent(intent: Intent, retryCount: Int) {
+        val maxRetries = 20  // ~2 seconds with 100ms delays
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isFinishing && !isDestroyed) {
-                deliverWakeWordEvent(i)
-                // Clear flag so rotating / resuming doesn't re-fire
-                i.removeExtra("from_wake_word")
+                // Try to deliver if event sink is ready
+                if (WakeWordService.eventSink != null) {
+                    deliverWakeWordEvent(intent)
+                    intent.removeExtra("from_wake_word")
+                } else if (retryCount < maxRetries) {
+                    // Retry if event sink not ready yet
+                    scheduleWakeWordEvent(intent, retryCount + 1)
+                } else {
+                    Log.w("MainActivity", "Event sink still not ready after ${maxRetries * 100}ms, giving up")
+                }
             }
-        }, 600L)
+        }, 100L)
     }
 
     private fun deliverWakeWordEvent(intent: Intent) {
         if (!intent.getBooleanExtra("from_wake_word", false)) return
-        val autoListen = intent.getBooleanExtra("auto_listen", false)
-        if (!autoListen) return
         val phrase = intent.getStringExtra("wake_phrase") ?: "hey companion"
-        WakeWordService.eventSink?.success(phrase)
+        val eventSink = WakeWordService.eventSink
+        if (eventSink != null) {
+            eventSink.success(phrase)
+        } else {
+            Log.w("MainActivity", "Event sink not ready to deliver wake word: $phrase")
+        }
     }
 
     private fun requestOverlayPermissionIfNeeded() {

@@ -549,7 +549,7 @@ class _ChangePasswordTile extends StatelessWidget {
         final result =
             await AuthService.instance.sendPasswordResetEmail(email);
         if (!context.mounted) return;
-        final success = result is! Object || result.runtimeType.toString().startsWith('AuthSuccess');
+        final success = result.runtimeType.toString().startsWith('AuthSuccess');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

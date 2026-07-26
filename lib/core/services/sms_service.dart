@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Sends SMS messages via the device's native SIM card (Android SmsManager).
@@ -7,7 +8,7 @@ class SmsService {
   static final instance = SmsService._();
 
   static const _channel = MethodChannel(
-    'com.aspiredesignovation.everwith/sms',
+    'com.example.everwith/sms',
   );
 
   /// Sends an SMS to [phoneNumber] with [message].
@@ -22,7 +23,8 @@ class SmsService {
         'message': message,
       });
       return result ?? false;
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      debugPrint('[SmsService] Error sending SMS: ${e.message}');
       return false;
     }
   }
@@ -32,7 +34,8 @@ class SmsService {
     try {
       final result = await _channel.invokeMethod<bool>('hasSmsPermission');
       return result ?? false;
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      debugPrint('[SmsService] Error checking SMS permission: ${e.message}');
       return false;
     }
   }
